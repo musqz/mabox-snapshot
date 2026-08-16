@@ -6,7 +6,7 @@ import argparse
 import shutil
 import sys
 
-from . import config, constants
+from . import config, constants, excludes
 from . import __version__
 
 
@@ -68,6 +68,43 @@ def cmd_config_set(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_excludes_list(_args: argparse.Namespace) -> int:
+    for pattern in excludes.ExcludeList().load():
+        print(pattern)
+    return 0
+
+
+def cmd_excludes_add(args: argparse.Namespace) -> int:
+    excludes.ExcludeList().add(args.pattern)
+    return 0
+
+
+def cmd_excludes_remove(args: argparse.Namespace) -> int:
+    excludes.ExcludeList().remove(args.pattern)
+    return 0
+
+
+def cmd_excludes_reset(_args: argparse.Namespace) -> int:
+    try:
+        excludes.ExcludeList().reset()
+    except FileNotFoundError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def cmd_excludes_edit(_args: argparse.Namespace) -> int:
+    return excludes.ExcludeList().edit()
+
+
+def cmd_excludes_folders(_args: argparse.Namespace) -> int:
+    user_dirs = excludes.resolve_user_dirs()
+    for name in constants.NAMED_FOLDERS:
+        resolved = user_dirs.get(name)
+        print(f"{name}: {resolved if resolved else '(not set)'}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="mabox-snapshot")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -83,6 +120,19 @@ def build_parser() -> argparse.ArgumentParser:
     set_parser.add_argument("key")
     set_parser.add_argument("value")
     set_parser.set_defaults(func=cmd_config_set)
+
+    excludes_parser = sub.add_parser("excludes", help="Manage the exclude list")
+    excludes_sub = excludes_parser.add_subparsers(dest="excludes_command", required=True)
+    excludes_sub.add_parser("list", help="Print the current exclude list").set_defaults(func=cmd_excludes_list)
+    excludes_sub.add_parser("edit", help="Open the exclude list in $EDITOR").set_defaults(func=cmd_excludes_edit)
+    excludes_sub.add_parser("reset", help="Restore the shipped default exclude list").set_defaults(func=cmd_excludes_reset)
+    excludes_sub.add_parser("folders", help="List named folders and their resolved paths").set_defaults(func=cmd_excludes_folders)
+    add_parser = excludes_sub.add_parser("add", help="Add a pattern")
+    add_parser.add_argument("pattern")
+    add_parser.set_defaults(func=cmd_excludes_add)
+    remove_parser = excludes_sub.add_parser("remove", help="Remove a pattern")
+    remove_parser.add_argument("pattern")
+    remove_parser.set_defaults(func=cmd_excludes_remove)
 
     return parser
 

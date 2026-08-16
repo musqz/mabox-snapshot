@@ -9,6 +9,9 @@ OS_RELEASE_NAME_MARKER = "Mabox"
 SYSTEM_CONFIG_FILE = Path("/etc/mabox-snapshot/mabox-snapshot.conf")
 USER_CONFIG_FILE = Path("~/.config/mabox-snapshot/mabox-snapshot.conf").expanduser()
 EXCLUDES_LIST_FILE = Path("/etc/mabox-snapshot/excludes.list")
+EXCLUDES_LIST_DEFAULT = Path("/usr/share/mabox-snapshot/excludes.list.default")
+
+NAMED_FOLDERS = ["Desktop", "Documents", "Downloads", "Music", "Pictures", "Videos", "Public", "Templates"]
 
 DEFAULT_WORKDIR = Path("/var/lib/mabox-snapshot/work")
 

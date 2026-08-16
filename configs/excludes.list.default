@@ -1,0 +1,34 @@
+# mabox-snapshot exclude list
+# One path-glob per line, relative to '/', no leading slash.
+# Blank lines and lines starting with # are ignored.
+# This file persists across package upgrades (see PKGBUILD backup=()).
+
+# Virtual / runtime filesystems
+dev/*
+proc/*
+sys/*
+run/*
+tmp/*
+var/tmp/*
+mnt/*
+media/*
+lost+found
+
+# Host-specific files that make no sense in a snapshot (both modes)
+etc/fstab
+etc/mtab
+etc/crypttab
+etc/adjtime
+etc/ssh/ssh_host_*
+etc/X11/xorg.conf*
+
+# Package manager state and cache
+var/cache/pacman/pkg/*
+var/lib/pacman/sync/*
+var/cache/pamac/*
+var/lib/pamac/*
+
+# Logs and crash dumps
+var/log/*
+var/lib/systemd/coredump/*
+var/crash/*

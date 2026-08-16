@@ -1,0 +1,12 @@
+# Named folders available to --exclude-folder, in both modes.
+# Resolved at runtime against the real user's ~/.config/user-dirs.dirs
+# (mabox_snapshot.excludes.resolve_user_dirs), which respects localized
+# folder names -- this file is a reference list, not read by the code.
+Desktop
+Documents
+Downloads
+Music
+Pictures
+Videos
+Public
+Templates
