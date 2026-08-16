@@ -1,0 +1,68 @@
+conky.config = {
+-- WINDOW
+	own_window = true,
+	own_window_type = 'desktop',
+	own_window_transparent = true,
+	own_window_hints = 'undecorated,below,skip_taskbar,skip_pager,sticky',
+	own_window_class = 'Conky-nobg',
+	own_window_title = 'Mabox Better Clock',
+    
+    alignment = 'top_middle',
+	gap_x = 0,
+	gap_y = 60,
+	
+-- FONTS
+	use_xft = true,
+	xftalpha = 1,
+	override_utf8_locale = true,
+
+-- COLORS
+	draw_shades = false,
+	default_shade_color = '#333333',
+	draw_outline = false,
+	default_outline_color = '#333333',
+
+-- time color
+    color8 = '#e4e4e4',
+--date color
+    color9 = '#3cd425',
+
+    short_units = true,
+    
+    template0 = [[%H:%M]],
+    template1 = [[%A, %B %d]],
+    template2 = [[Noto Sans]],
+    template3 = [[Ubuntu]],
+    template4 = [[64]],
+    template5 = [[32]],
+    template6 = [[16]],
+
+-- MISC
+-- Boolean value, if true, Conky will be forked to background when started.
+	background = true,
+
+-- Adds spaces around certain objects to stop them from moving other things
+-- around, this only helps if you are using a mono font
+-- Options: right, left or none
+	use_spacer = 'none',
+
+-- Subtract (file system) buffers from used memory?
+	no_buffers = true,
+
+-- Imlib2 image cache size, in bytes. Default 4MiB Increase this value if you use
+-- $image lots. Set to 0 to disable the image cache.
+	imlib_cache_size = 0,
+
+-- Use the Xdbe extension? (eliminates flicker)
+-- It is highly recommended to use own window with this one
+-- so double buffer won't be so big.
+	double_buffer = true,
+	update_interval = 1,
+-- #${voffset -4}${if_existing .config/conky/menuscripts/.hline}${hr 2}${endif}
+};
+
+conky.text = [[
+${alignc}${font ${template2}:size=${template4}:bold}${color8}${time ${template0}}${if_existing .config/conky/menuscripts/.seconds}${voffset -${template5}}${font ${template2}:size=${template5}}${time %S}${voffset ${template5}}${endif}${font}${color9}
+${if_existing .config/conky/menuscripts/.date}${alignr}${font ${template3}:size=${template6}:bold}${time ${template1}}${endif}
+]];
+

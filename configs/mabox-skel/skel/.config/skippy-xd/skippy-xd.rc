@@ -1,0 +1,210 @@
+# Copy this to ~/.config/skippy-xd/skippy-xd.rc and edit it to your liking
+#
+# File Syntax:
+# Comments must be on their own seperate lines that start with a #
+#
+# Colors can be anything XAllocNamedColor can handle
+# (Like "black" or "#000000")
+#
+# Fonts are Xft font descriptions
+#
+# Booleans are "true" or anything but "true" (-> false)
+#
+# Opacity is an integer in the range of 0-255
+#
+
+# To reload system config options, stop and then start new skippy daemon
+# All other config options can be reloaded on the fly
+# With skippy-xd --config or skippy-xd --config-reload
+
+[system]
+
+# File path for client-to-daemon communication
+daemonPath = /tmp/skippy-xd-fifo
+
+# File path for daemon-to-client communication
+clientPath = /tmp/skippy-xd-fofi
+
+# This queries the list of windows
+# Depending on your window manager, you may want to choose between
+# XQueryTree, _NET_CLIENT_LIST, _WIN_CLIENT_LIST
+# If you see missing windows, extra windows, or even crashes,
+# Try a different option
+clientList = _NET_CLIENT_LIST
+
+# When compositors such as picom are not used
+# Turn on pseudo-transparency
+pseudoTrans = true
+
+[multimonitor]
+
+# Filter windows by Xinerama monitor
+showOnlyCurrentMonitor = false
+
+# Display only windows on the current XScreen
+showOnlyCurrentScreen = true
+
+[layout]
+
+# xd: row-to-row layout
+# cosmos: position preserving layout
+switchLayout = xd
+exposeLayout = cosmos
+
+# Wait time in ms before displaying switch previews
+# Set = 0 to veto live previews completely
+switchWaitDuration = 100
+
+# During switchWaitDuration and animation,
+# Whether switch can cycle through windows
+switchCycleDuringWait = false
+
+# Enable to cycle through all virtual desktops
+switchCycleDesktops = false
+exposeCycleDesktops = false
+
+# Relative minimal pixel distance between windows
+distance = 50
+
+# Whether to show the window bigger than its original size
+allowUpscale = false
+
+[display]
+
+# Animation duration in ms
+# Set = 0 to switch off animations
+animationDuration = 200
+
+# Animation refresh rate in fps
+animationRefresh = 60
+
+# Background when skippy-xd is activated
+# To display background wallpaper:
+#   background = /home/richard/screenshots/256.png
+# For tinted background:
+#   background = #00000055
+# For transparent background:
+#   background = None
+background = #00000055
+
+# During paging, do not apply background to individual desktops
+preservePages = true
+
+# Whether to display window frames
+includeFrame = true
+
+# Show window previews with rounded corners
+cornerRadius = 0
+
+# Icons on live previews
+icon = true
+iconPlace = left left
+iconSize = 48
+
+# Windows that were never shown before
+[filler]
+tint = #333333
+iconPlace = mid mid
+iconSize = 48
+
+# Windows that are not filler, highlight, shadow, multiselect
+[normal]
+tint = black
+tintOpacity = 0
+opacity = 255
+
+# Currently highlighted window
+[highlight]
+tint = #444444
+tintOpacity = 50
+opacity = 255
+
+# Unmapped windows: minimized, shaded, not in current virtual desktop
+[shadow]
+tint = #040404
+tintOpacity = 0
+opacity = 160
+
+# Highlighted in multi-select mode
+[multiselect]
+tint = #3376BB
+tintOpacity = 50
+opacity = 255
+
+# Windows of type _NET_WM_WINDOW_TYPE_DOCK
+[panel]
+show = true
+backgroundTinting = true
+reserveSpace = true
+
+# Windows of type _NET_WM_WINDOW_TYPE_DESKTOP
+[desktop]
+show = false
+backgroundTinting = true
+
+# Label per display window
+# option = windowClass to display window class
+# option = windowTitle to display window title
+[label]
+show = true
+option = windowClass
+offsetX = 0
+offsetY = -40
+width = 0.8
+border = #e5e5e5
+background = #202020
+backgroundHighlight = #32B557
+opacity = 128
+text = white
+textOutline = #0e0e0e
+font = fixed-11:weight=bold
+
+[bindings]
+
+# When focus is stolen off skippy-xd
+# E.g. a window is newly created during skippy-xd activation
+# Focus back on skippy-xd
+enforceFocus = true
+
+# After this time in ms, pivot "locks" into toggle mode
+# And the pivot key no longer needs to be held
+# Set to 0 to disable pivot locking
+pivotLockingTime = 0
+
+# Reposition the mouse to the centre of the window
+moveMouse = false
+
+# key* = is a list of valid XWindows KeySym identifiers,
+# Case sensitive and <space> seperated list.
+# Run the program 'xev' to find them.
+
+keysUp = Up
+keysDown = Down
+keysLeft = Left
+keysRight = Right
+
+keysSelect = Return space
+keysCancel = Escape
+keysNext = n
+keysPrev = p
+
+keysIconify = 1
+keysShade = 2
+keysClose = 3
+
+# Mouse button bindings, options include
+# "no": do nothing
+# "focus": select window
+# "iconify": minimize window
+# "shade-ewmh": toggle window shade
+# "close-icccm": close window with ICCCM method
+# "close-ewmh": lcose window with EWMH method
+# "destroy": forcefully destroy window
+# "keysPrev": focus on previous window
+# "keysNext": focus on next window
+
+miwMouse1 = focus
+miwMouse2 = close-ewmh
+miwMouse3 = iconify
+miwMouse4 = keysNext
+miwMouse5 = keysPrev

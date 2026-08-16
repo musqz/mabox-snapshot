@@ -1,0 +1,38 @@
+@text,,10,6,150,20,0,left,top,auto,#000000,<span size="large"></span>
+@search,,44,6,150,20,2,left,top,auto,#000000 0,<i>Type to search</i>
+^sep()
+Terminal,exo-open --launch TerminalEmulator,utilities-terminal
+WWW Browser,exo-open --launch WebBrowser,firefox
+File Manager,exo-open --launch FileManager,system-file-manager
+Add/Remove software,pamac-manager,pamac
+^sep()
+Applications,^checkout(lx-apps),applications-other
+
+^sep()
+Screenshot,mb-jgtools screenshot,emblem-photos
+
+^sep()
+Lock screen,betterlockscreen -l dim -t "Type password to unlock...",system-lock-screen
+^sep()
+Settings,^checkout(settings),applications-utilities
+^sep()
+Exit,mb-jgtools mblogout,system-shutdown
+
+^tag(settings)
+. ~/.config/mabox/settings.csv
+
+
+^sep(Help)
+User Guide (online),^checkout(userguide),distributor-logo-mabox
+MaboxForum,exo-open --launch WebBrowser https://forum.maboxlinux.org/,distributor-logo-mabox
+
+
+^tag(userguide)
+. /usr/share/mb-jgtools/userguide.csv
+
+. ~/.config/mabox/settings_tags.csv
+
+^tag(lx-apps)
+
+
+

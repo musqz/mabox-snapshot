@@ -1,0 +1,34 @@
+  Website,xdg-open https://maboxlinux.org
+  Community forum,xdg-open https://forum.maboxlinux.org
+  Manual,xdg-open https://manual.maboxlinux.org
+^sep()
+  More Links,^checkout(more)
+^sep(Mabox tools)
+Mabox Control Center,mcc
+Welcome Screen,mwelcome
+^sep(<small>Menus</small>)
+Main menu	<span bgcolor="#333333" color="#d3d3d3">  <small></small>  </span>,mb-jgtools main
+Mabox Config Menu	<span bgcolor="#333333" color="#d3d3d3">  <small> + s</small>  </span>,mb-jgtools settings
+^sep()
+Left Sidepanel	<span bgcolor="#333333" color="#d3d3d3">  <small>C +  + Left</small>  </span>,mb-jgtools places
+Right Sidepanel	<span bgcolor="#333333" color="#d3d3d3">  <small>C +  + Right</small>  </span>,mb-jgtools right
+^sep()
+Places Menu	<span bgcolor="#333333" color="#d3d3d3">  <small> + .</small>  </span>,mb-places -s
+Logout Menu	<span bgcolor="#333333" color="#d3d3d3">  <small> + x</small>  </span>,mb-jgtools mblogout
+ScreenShot/Recorder	<span bgcolor="#333333" color="#d3d3d3">  <small> + PrtScr</small>  </span>,mb-jgtools screenshot
+^sep(<small>Other</small>)
+<b>Conky</b> Widget <b>Manager</b>,colorizer-conky -s
+^tag(more)
+^sep(More Links)
+  Repo,xdg-open https://repo.maboxlinux.org
+  Developer Blog,xdg-open https://blog.maboxlinux.org
+^sep()
+<span color='red'></span>  Donate,xdg-open https://ko-fi.com/maboxlinux
+  Mabox on Distrowatch,xdg-open https://distrowatch.com/table.php?distribution=mabox
+^sep(Social media)
+  Reddit,xdg-open https://old.reddit.com/r/MaboxLinux/
+  Youtube,xdg-open https://www.youtube.com/c/MaboxLinux
+  Odysee,xdg-open https://odysee.com/@mabox-linux:8
+  Facebook,xdg-open https://facebook.com/maboxlinux/
+  Twitter,xdg-open https://twitter.com/MaboxLinux/
+󰙯  Discord,xdg-open https://discord.com/invite/kFAuuh8GEw

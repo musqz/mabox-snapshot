@@ -1,0 +1,6 @@
+# Here you can customize right sidepanel
+# Format:
+# Label,command,icon
+# Example:
+^sep(Custom commands)
+Configure...,xdg-open $HOME/.config/mabox/right-append.csv,add

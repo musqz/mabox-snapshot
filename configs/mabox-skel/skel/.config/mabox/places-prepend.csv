@@ -1,0 +1,21 @@
+### Your own commands in left sidepanel (ctrl + win + Left) - TOP
+#
+# Syntax
+# Commands:
+# Label,command,icon (optional)
+#
+# ^sep()  # separator - line
+# ^sep(NAME) # separator 
+#
+# Comment out line to disable
+##########################
+
+#^sep(My own commands)
+#<b>FSearch</b>,fsearch
+
+# Examples (uncomment to enable)
+
+#^sep(Graphics)
+#The Gimp,gimp
+#Inkscape,inkscape
+#Blender 3D,blender

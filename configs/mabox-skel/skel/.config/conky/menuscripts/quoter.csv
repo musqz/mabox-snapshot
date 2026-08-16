@@ -1,0 +1,11 @@
+# Add your commands here
+# Syntax is simple: Label,command
+# examples:
+
+#The Gimp,gimp
+#Firefox,firefox --new-window https://maboxlinux.org
+#Btop,terminator -T Btop -e btop
+
+# If only one command is uncommented it will run, if more commands available menu will be shown
+# to see how it works play with uncomenting examples above and clicking Conky
+Qoute notify,quote.sh -n

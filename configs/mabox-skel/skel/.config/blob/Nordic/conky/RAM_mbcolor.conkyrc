@@ -1,0 +1,81 @@
+conky.config = {
+-- WINDOW
+	own_window = true,
+	own_window_type = 'desktop',
+	own_window_transparent = true,
+	own_window_hints = 'undecorated,below,skip_taskbar,skip_pager,sticky',
+	own_window_colour = '#2E3440',
+	own_window_class = 'Conky',
+	own_window_title = 'Mabox RAM Conky',
+    
+    alignment = 'bottom_left',
+	gap_x = 690,
+	gap_y = 60,
+    minimum_height = 64,
+    minimum_width = 64,
+    	
+-- FONTS
+	use_xft = true,
+	font = 'Ubuntu:size=8',
+	xftalpha = 1,
+	override_utf8_locale = true,
+
+-- COLORS
+	draw_shades = false,
+	default_shade_color = '#000000',
+	draw_outline = false,
+	default_outline_color = '#222222',
+
+	default_color = '#4C566A',
+	color0 = '#B48EAD',
+    color1 = '#D8DEE9',
+    color2 = '#EBCB8B',
+
+-- BORDERS
+	draw_borders = true,
+-- Stippled borders?
+	stippled_borders = 0,
+-- border margins
+	border_inner_margin = 14,
+	border_outer_margin = 2,
+-- border width
+	border_width = 4,
+-- graph borders
+    draw_graph_borders = true,
+
+
+-- MISC
+-- Boolean value, if true, Conky will be forked to background when started.
+	background = true,
+    short_units = true,
+
+-- Adds spaces around certain objects to stop them from moving other things
+-- around, this only helps if you are using a mono font
+-- Options: right, left or none
+	use_spacer = 'none',
+
+-- Subtract (file system) buffers from used memory?
+	no_buffers = true,
+
+-- Imlib2 image cache size, in bytes. Default 4MiB Increase this value if you use
+-- $image lots. Set to 0 to disable the image cache.
+--imlib_cache_size = 0,
+
+-- Use the Xdbe extension? (eliminates flicker)
+-- It is highly recommended to use own window with this one
+-- so double buffer won't be so big.
+	double_buffer = true,
+	update_interval = 2,
+};
+
+conky.text = [[
+${color0}RAM${alignr 4}$legacymem / $memmax
+${color2}${alignr}${memgraph 50,190 -t}${voffset -6}
+${color0}${top_mem name 1}${alignr}${color1}${top_mem mem_res 1}
+${color0}${top_mem name 2}${alignr}${color1}${top_mem mem_res 2}
+${color0}${top_mem name 3}${alignr}${color1}${top_mem mem_res 3}
+${color0}${top_mem name 4}${alignr}${color1}${top_mem mem_res 4}
+${color0}${top_mem name 5}${alignr}${color1}${top_mem mem_res 5}
+]];
+
+

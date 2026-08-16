@@ -1,0 +1,96 @@
+conky.config = {
+-- WINDOW
+	own_window = true,
+	own_window_type = 'desktop',
+	own_window_transparent = false,
+	own_window_hints = 'undecorated,below,skip_taskbar,skip_pager,sticky',
+	own_window_colour = '#0d081b',
+	own_window_class = 'Conky',
+	own_window_title = 'Mabox Shortcuts Conky',
+    
+    alignment = 'bottom_left',
+	gap_x = 30,
+	gap_y = 60,
+	minimum_width = '200',
+
+-- FONTS
+	use_xft = true,
+	font = 'Ubuntu:size=8',
+	xftalpha = 1,
+	override_utf8_locale = true,
+
+-- COLORS
+	draw_shades = false,
+	default_shade_color = '#000000',
+	draw_outline = false,
+	default_outline_color = '#222222',
+
+	default_color = '#562d66',
+	color0 = '#a5439e',
+    color1 = '#4f6998',
+
+-- BORDERS
+	draw_borders = true,
+-- Stippled borders?
+	stippled_borders = 0,
+-- border margins
+	border_inner_margin = 14,
+	border_outer_margin = 2,
+-- border width
+	border_width = 4,
+
+-- MISC
+-- Boolean value, if true, Conky will be forked to background when started.
+	background = true,
+
+-- Adds spaces around certain objects to stop them from moving other things
+-- around, this only helps if you are using a mono font
+-- Options: right, left or none
+	use_spacer = 'none',
+
+-- Subtract (file system) buffers from used memory?
+	no_buffers = true,
+
+-- Imlib2 image cache size, in bytes. Default 4MiB Increase this value if you use
+-- $image lots. Set to 0 to disable the image cache.
+	imlib_cache_size = 0,
+
+-- Use the Xdbe extension? (eliminates flicker)
+-- It is highly recommended to use own window with this one
+-- so double buffer won't be so big.
+	double_buffer = true,
+	update_interval = 2,
+};
+
+conky.text = [[
+${color1}RUN${alignr}${color0}super = windows key${voffset -8}
+${color0}${hr 1}${voffset -4}
+${color0}terminal  ${alignr}${color1}super+t
+${color0}quake-terminal  ${alignr}${color1}ctrl+~,F12
+${color0}file manager  ${alignr}${color1}super+f
+${color0}web browser  ${alignr}${color1}super+w
+${color0}text editor  ${alignr}${color1}super+e
+${color0}file search  ${alignr}${color1}super+/
+${color0}galculator  ${alignr}${color1}super+g
+${color0}internet radio  ${alignr}${color1}super+r
+${color0}volume control  ${alignr}${color1}super+v
+${color0}toggle Picom  ${alignr}${color1}super+p
+${color0}toggle Conky  ${alignr}${color1}super+c
+${color0}lock screen  ${alignr}${color1}super+l
+${color0}exit  ${alignr}${color1}super+x
+${color1}WINDOWS ${color0} ${hr 1}${voffset -2}
+${color0}close ${alignr} ${color1}alt+F4
+${color0}iconify ${alignr} ${color1}alt+F5
+${color0}maximize ${alignr} ${color1}alt+F6
+${color0}expose ${alignr} ${color1}super+~
+${color0}show desktop ${alignr} ${color1}super+d
+${color0}un/decorate ${alignr} ${color1}super+b
+${color0}toggle fullscreen ${alignr} ${color1}F11
+${color1}windows placement: 
+${color0} - half screen ${alignr} ${color1}super+arrows
+${color0} - 1/4 screen ${alignr} ${color1}super+numpad[1..9]
+${color1}DESKTOPS ${color0} ${hr 1}${voffset -2}
+${color0}go to desktop ${alignr} ${color1}super+[1..4]
+]];
+
+

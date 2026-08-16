@@ -1,0 +1,4 @@
+^tag(autostart)
+^sep(Autostart)
+Choose apps/services (GUI Editor),yautostart,gtk-execute
+Edit autostart file (advanced),xdg-open ~/.config/openbox/autostart,geany

@@ -1,0 +1,57 @@
+conky.config = {
+
+	own_window = true,
+	own_window_type = 'desktop',
+	own_window_transparent = false,
+	own_window_hints = 'undecorated,below,sticky,skip_taskbar,skip_pager',
+	own_window_colour = '#0d081b',
+	own_window_class = 'Conky',
+	own_window_title = 'Mabox Info Conky',
+    
+    alignment = 'top_right',
+	gap_x = 30,
+	gap_y = 60,
+	minimum_width = 240,
+
+	use_xft = true,
+	font = 'Ubuntu:size=8',
+	xftalpha = 1,
+	override_utf8_locale = true,
+    
+    
+	draw_shades = false,
+	default_shade_color = '#222222',
+	draw_outline = false,
+	default_outline_color = '#222222',
+    
+    default_color = '#562d66',
+	color0 = '#a5439e',
+    color1 = '#4f6998',
+	cpu_avg_samples = 2,
+
+	draw_borders = true,
+	stippled_borders = 0,
+	border_inner_margin = 14,
+	border_outer_margin = 2,
+	border_width = 4,
+    draw_graph_borders = true,
+
+	background = true,
+	no_buffers = true,
+	imlib_cache_size = 0,
+    short_units = true,
+	double_buffer = true,
+	update_interval = 2,
+};
+
+conky.text = [[
+${image ~/.config/conky/images/mabox_3d.png -s 64x64}${alignr}${color0} Mabox Linux ${execi 10000 awk -F'=' '/DISTRIB_RELEASE=/ {printf $2" "} /CODENAME/ {print $2}' /etc/lsb-release}
+${color1}${alignr}${execi 10000 whoami}@${nodename}
+${alignr}${color0}uptime ${color1}${uptime_short}
+${alignr}${color0}${alignr}kernel ${color1}${kernel}
+${alignr}${color0}${alignr}arch ${color1}${machine}
+${alignr}${color0}${alignr}filesystem ${color1}${fs_type}${voffset 10}
+${alignr}${color1}${execpi 1800 checkupdates.sh -m}${font}${color1}
+${alignr}${color1} installed pkgs: ${color0}${execi 10000 pacman -Q | wc -l}
+${alignr}${color1} branch: ${color0}${execi 10000 pacman-mirrors -G}
+]];

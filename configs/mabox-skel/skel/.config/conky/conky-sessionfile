@@ -1,0 +1,4 @@
+conky -c ~/.config/conky/mabox_tools_mbcolor.conkyrc & sleep .5
+conky -c ~/.config/conky/shortcuts_mbcolor.conkyrc & sleep .5
+conky -c ~/.config/conky/sysinfo_mbcolor.conkyrc & sleep .5
+conky -c ~/.config/conky/Polaroid_mbcolor.conkyrc & sleep .5

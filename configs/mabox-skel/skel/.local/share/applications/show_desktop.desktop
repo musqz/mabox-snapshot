@@ -1,0 +1,16 @@
+[Desktop Entry]
+Encoding=UTF-8
+Name=Show Desktop (win+d)
+Name[pl]=Pokaż Pulpit (win+d)
+Name[es]=Mostrar Escritorio (win+d)
+Comment=Show Desktop (win+d)
+Comment[pl]=Pokaż Pulpit (win+d)
+Comment[es]=Mostrar Escritorio (win+d)
+Exec=show_desktop
+Terminal=false
+X-MultipleArgs=false
+Type=Application
+Icon=desktop
+Categories=Utility;
+MimeType=
+StartupNotify=false

@@ -1,0 +1,8 @@
+<b>Collection name: Nordic</b>	
+Provided by Mabox 21.11 Herbolth
+
+Wallpaper saved by Nitrogen:\n/usr/share/backgrounds/Minimal-Nord.png;\n
+Openbox theme:  Nordic\n
+GTK theme:  Nordic\n
+Runninig Conky:\t\n\t~/.config/conky/logo_mbcolor.conkyrc;\n\t~/.config/conky/mabox_tools_mbcolor.conkyrc;\n\t~/.config/conky/shortcuts_mbcolor.conkyrc;\n\t~/.config/conky/sysinfo_mbcolor.conkyrc;\n
+Running Tint2s:\t\n\t~/.config/tint2/nordic.tint2rc\n\t~/.config/tint2/nordic_launcher.tint2rc\n

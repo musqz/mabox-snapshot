@@ -159,14 +159,6 @@ def cmd_create(args: argparse.Namespace) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 1
 
-    if args.mode == "reset":
-        print(
-            "error: reset mode is not implemented yet -- use --dry-run to preview, "
-            "or run --mode preserving",
-            file=sys.stderr,
-        )
-        return 1
-
     workdir_mod.ensure_workdir(cfg.workdir)
     output_dir.mkdir(parents=True, exist_ok=True)
     sfs_dest.parent.mkdir(parents=True, exist_ok=True)
@@ -178,6 +170,12 @@ def cmd_create(args: argparse.Namespace) -> int:
     try:
         workdir_mod.check_free_space(cfg.workdir, required_bytes, skip=cfg.skip_space_check)
     except workdir_mod.InsufficientSpaceError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+
+    try:
+        overlay.build_overlay(plan)  # no-op for preserving mode
+    except FileNotFoundError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
 
@@ -198,7 +196,11 @@ def cmd_create(args: argparse.Namespace) -> int:
     isobuild.prepare_bios_boot(iso_root)
     isobuild.prepare_efi_boot(iso_root, cfg.workdir)
     isobuild.assemble(iso_root, dest, constants.ISO_VOLID)
-    permissions.normalize(cfg.workdir)
+    # Not cfg.workdir as a whole: the overlay dir (reset mode) already had its
+    # own normalize() + sanitize pass inside build_overlay(), which explicitly
+    # chmods shadow/gshadow 0640 -- a blanket re-normalize here would widen
+    # them back to world-readable.
+    permissions.normalize(iso_root)
 
     print(f"ISO written to {dest}")
     print("note: boot this in a VM before trusting it -- BIOS+UEFI hybrid boot is not self-verifying.")

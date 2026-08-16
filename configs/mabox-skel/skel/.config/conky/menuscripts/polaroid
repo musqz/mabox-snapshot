@@ -1,0 +1,28 @@
+#!/bin/bash
+# polaroid  conky script
+
+WHISTORY="$HOME/.cache/colorizer/.wallpaper_history"
+THUMBDIR="$HOME/.cache/colorizer/thumbs"
+mkdir -p ${THUMBDIR}/polaroid
+mapfile -t < <(tail -n 5 "${WHISTORY}"|tac)
+
+for i in ${MAPFILE[@]}; do
+    NAME=${i////_}
+    if [[ "${NAME}" =~ ^_home_.* ]]; then
+        n=${#HOME}
+        ((n++))
+        NAME=${NAME:${n}}
+    fi
+    pol+=("${NAME}")
+    if [[ ! -f "${THUMBDIR}/polaroid/${NAME}.png" ]]; then
+    ##polaroid
+    magick ${THUMBDIR}/${NAME}.png -bordercolor white -background black +polaroid /tmp/polaroid.png
+    convert /tmp/polaroid.png -gravity center -background transparent -extent 333x240  ${THUMBDIR}/polaroid/${NAME}.png
+    rm /tmp/polaroid.png
+    fi
+done
+
+printf "\${image ${THUMBDIR}/polaroid/${pol[1]}.png -p 0,0 -s 333x240}"
+printf "\${image ${THUMBDIR}/polaroid/${pol[2]}.png -p 0,140 -s 166x120}"
+printf "\${image ${THUMBDIR}/polaroid/${pol[3]}.png -p 83,160 -s 166x120}"
+printf "\${image ${THUMBDIR}/polaroid/${pol[4]}.png -p 166,120 -s 166x120}"

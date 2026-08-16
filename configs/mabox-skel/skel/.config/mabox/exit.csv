@@ -1,0 +1,11 @@
+## Comment out with # if you want to hide some lines
+^sep(Exit...)
+Logout,openbox --exit,system-log-out
+#Suspend,systemctl suspend,system-suspend
+#Hibernate,systemctl hibernate,system-hibernate
+Reboot,systemctl reboot,system-reboot
+Lock screen, mbscreenlocker,system-lock-screen
+Shutdown,systemctl poweroff,system-shutdown
+^sep()
+Configure options,xdg-open $HOME/.config/mabox/exit.csv,geany
+

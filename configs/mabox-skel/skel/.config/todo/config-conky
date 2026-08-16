@@ -1,0 +1,53 @@
+export TODO_DIR=~/.todo
+
+# Your todo/done/report.txt locations
+### export TODO_FILE="$TODO_DIR/todo.txt"
+### export DONE_FILE="$TODO_DIR/done.txt"
+### export REPORT_FILE="$TODO_DIR/report.txt"
+
+# Mabox's modification - allows multiple todo files
+: ${TODO_FILE:-"$TODO_DIR/todo.txt"}; export TODO_FILE
+: ${DONE_FILE:-"$TODO_DIR/done.txt"}; export DONE_FILE
+: ${REPORT_FILE:-"$TODO_DIR/report.txt"}; export REPORT_FILE
+
+# todo.txt configuration for Conky highlighting. 
+export BLACK='${color black}'
+export RED='${color red}'
+export GREEN='${color green}'
+export BROWN='${color brown}'
+export BLUE='${color blue}'
+export PURPLE='${color purple}'
+export CYAN='${color cyan}'
+export LIGHT_GREY='${color LightGrey}'
+export DARK_GREY='${color DarkGrey}'
+export LIGHT_RED='${color LightRed}'
+export LIGHT_GREEN='${color LightGreen}'
+export YELLOW='${color yellow}'
+export LIGHT_BLUE='${color LightBlue}'
+export LIGHT_PURPLE='${color LightPurple}'
+export LIGHT_CYAN='${color LightCyan}'
+export WHITE='${color white}'
+export DEFAULT='${color0}'
+
+export PRI_A=$YELLOW        # color for A priority
+export PRI_B=$GREEN         # color for B priority
+export PRI_C=$LIGHT_BLUE    # color for C priority
+# export PRI_D=...            # define your own
+export PRI_X=$WHITE         # color unless explicitly defined
+
+# There is highlighting for tasks that have been done,
+# but haven't been archived yet.
+#
+export COLOR_DONE=$LIGHT_GREY
+
+# There is highlighting for projects, contexts, dates, and item numbers.
+#
+export COLOR_PROJECT=$RED
+export COLOR_CONTEXT=$CYAN
+export COLOR_DATE=$LIGHT_BLUE
+export COLOR_NUMBER=$LIGHT_GREY
+
+# There is highlighting for metadata key:value pairs e.g.
+# DUE:2006-08-01 or note:MYNOTE
+#
+export COLOR_META=$LIGHT_RED

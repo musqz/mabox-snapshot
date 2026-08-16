@@ -1,0 +1,14 @@
+{
+    "layout": {
+        "tab1": [
+            {
+                "command": "pyradio",
+                "ratio": 0.7
+            },
+            {
+                "command": "cava",
+                "ratio": 0.3
+            }
+        ]
+    }
+}

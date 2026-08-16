@@ -1,0 +1,37 @@
+conky.config = {
+-- WINDOW
+    own_window = true,
+    own_window_type = 'desktop',
+    own_window_transparent = true,
+    own_window_hints = 'undecorated,below,skip_taskbar,skip_pager,sticky',
+    own_window_colour = '#282828',
+    own_window_class = 'Conky-nobg',
+    own_window_title = 'Mabox Polaroid Widget',
+    
+    alignment = 'bottom_right',
+    gap_x = 30,
+    gap_y = 60,
+    minimum_width = 333,
+    minimum_height = 280,
+
+-- MISC
+-- Boolean value, if true, Conky will be forked to background when started.
+    background = true,
+    use_spacer = 'none',
+    no_buffers = true,
+
+-- Imlib2 image cache size, in bytes. Default 4MiB Increase this value if you use
+-- $image lots. Set to 0 to disable the image cache.
+    imlib_cache_size = 10,
+    double_buffer = true,
+    update_interval = 1,
+};
+
+conky.text = [[
+${execpi 30 ~/.config/conky/menuscripts/polaroid}
+#${image ~/.config/conky/images/punaise.png -p 103,0 -s 96x96}
+# Get punaise image from https://clipground.com/punaise-png.html and save as ~/.config/conky/images/punaise.png
+# then uncomment above image line
+]];
+
+

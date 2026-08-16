@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Conky Session
+Comment=Conky Session 
+Icon=
+Exec=mb-conky-session --autostart
+Terminal=false
+Type=Application
+Hidden=false
