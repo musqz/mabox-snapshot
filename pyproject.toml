@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mabox-snapshot"
+version = "0.1.0"
+description = "Snapshot a running Mabox Linux system into a bootable live/install ISO"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [{ name = "musqz" }]
+
+[project.urls]
+Homepage = "https://github.com/musqz/mabox-snapshot"
+
+[project.scripts]
+mabox-snapshot = "mabox_snapshot.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["mabox_snapshot"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests/unit"]
