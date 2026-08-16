@@ -1,0 +1,79 @@
+from mabox_snapshot import calamares
+
+
+def test_load_branding_returns_none_when_no_slides(tmp_path):
+    assert calamares.load_branding(tmp_path) is None
+
+
+def test_load_branding_parses_toml_and_matches_slide_indices(tmp_path):
+    (tmp_path / "slide-0.png").write_bytes(b"fake")
+    (tmp_path / "slide-2.png").write_bytes(b"fake")
+    (tmp_path / "branding.toml").write_text(
+        'product_name = "Mabox Linux"\n'
+        "radius = 12\n"
+        '[slide.0]\nhead = "Welcome"\nbody = "Enjoy Mabox"\n'
+    )
+
+    branding = calamares.load_branding(tmp_path)
+
+    assert branding is not None
+    assert branding.product_name == "Mabox Linux"
+    assert branding.radius == 12
+    assert [s.image for s in branding.slides] == ["slide-0.png", "slide-2.png"]
+    assert branding.slides[0].head == "Welcome"
+    assert branding.slides[1].head == ""  # no [slide.2] section -- graceful default
+
+
+def test_build_branding_desc_contains_component_and_product_name():
+    branding = calamares.BrandingConfig(product_name="Mabox Linux", radius=8, slides=[])
+    desc = calamares.build_branding_desc(branding)
+
+    assert "componentName: mabox" in desc
+    assert 'productName: "Mabox Linux"' in desc
+    assert 'slideshow: "show.qml"' in desc
+
+
+def test_build_show_qml_embeds_slide_data():
+    branding = calamares.BrandingConfig(
+        radius=8, slides=[calamares.Slide(image="slide-0.png", head="Hi", body="Body text")]
+    )
+    qml = calamares.build_show_qml(branding)
+
+    assert '"slide-0.png"' in qml
+    assert '"Hi"' in qml
+    assert '"Body text"' in qml
+    assert "radius: 8" in qml
+
+
+def test_write_settings_override_repoints_branding_line(tmp_path):
+    source = tmp_path / "settings.conf"
+    source.write_text("modules-search: [ local ]\nbranding: manjaro\nprompt-install: false\n")
+
+    overlay_dir = tmp_path / "overlay"
+    calamares.write_settings_override(overlay_dir, source)
+
+    result = (overlay_dir / "etc/calamares/settings.conf").read_text()
+    assert "branding: mabox" in result
+    assert "prompt-install: false" in result  # rest of the file untouched
+
+
+def test_write_branding_copies_slide_images_and_writes_desc(tmp_path):
+    images_dir = tmp_path / "images"
+    images_dir.mkdir()
+    (images_dir / "slide-0.png").write_bytes(b"fake-png")
+
+    branding = calamares.BrandingConfig(slides=[calamares.Slide(image="slide-0.png", head="Hi")])
+    overlay_dir = tmp_path / "overlay"
+    calamares.write_branding(overlay_dir, branding, images_dir)
+
+    branding_dir = overlay_dir / "etc/calamares/branding/mabox"
+    assert (branding_dir / "slide-0.png").read_bytes() == b"fake-png"
+    assert (branding_dir / "branding.desc").exists()
+    assert (branding_dir / "show.qml").exists()
+
+
+def test_build_calamares_branding_returns_false_when_unconfigured(tmp_path):
+    overlay_dir = tmp_path / "overlay"
+    applied = calamares.build_calamares_branding(overlay_dir, tmp_path / "no-images")
+    assert applied is False
+    assert not (overlay_dir / "etc/calamares").exists()

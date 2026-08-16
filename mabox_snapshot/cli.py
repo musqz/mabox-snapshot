@@ -10,7 +10,7 @@ from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
-from . import config, constants, excludes, grubcfg, isobuild, kernels, overlay, packages, permissions, privilege, squashfs
+from . import calamares, config, constants, excludes, grubcfg, isobuild, kernels, overlay, packages, permissions, privilege, squashfs
 from . import workdir as workdir_mod
 from . import __version__
 
@@ -122,6 +122,12 @@ def cmd_create(args: argparse.Namespace) -> int:
     mkinitcpio_conf = cfg.workdir / "mkinitcpio-miso.conf"
     exclude_file = cfg.workdir / "exclude.list" if plan.exclude_patterns else None
 
+    splash_source = constants.IMAGES_DIR / "splash.png"
+    has_splash = splash_source.exists()
+    splash_dest = iso_root / "boot" / "grub" / "splash.png"
+
+    branding = calamares.load_branding() if args.mode == "reset" else None
+
     sfs_cmd = squashfs.build_command(plan.sources, sfs_dest, exclude_file, cfg.compression, cfg.compression_level)
     initramfs_cmds = [
         isobuild.build_mkinitcpio_command(
@@ -146,6 +152,13 @@ def cmd_create(args: argparse.Namespace) -> int:
     print(f"squashfs:    {' '.join(str(c) for c in sfs_cmd)}")
     for cmd in initramfs_cmds:
         print(f"initramfs:   {' '.join(str(c) for c in cmd)}")
+    if has_splash:
+        print(f"splash:      {' '.join(str(c) for c in grubcfg.build_splash_command(splash_source, splash_dest))}")
+    else:
+        print(f"splash:      none configured ({splash_source} not found) -- plain grub boot menu")
+    if args.mode == "reset":
+        note = f"{len(branding.slides)} slide(s) from {constants.IMAGES_DIR}" if branding else "none configured -- stock Manjaro branding"
+        print(f"calamares:   {note}")
     print(f"bios boot:   {' '.join(str(c) for c in bios_cmd)}")
     print(f"efi boot:    {' '.join(str(c) for c in efi_cmd)}")
     print(f"assemble:    {' '.join(str(c) for c in xorriso_cmd)}")
@@ -189,9 +202,14 @@ def cmd_create(args: argparse.Namespace) -> int:
         shutil.copy2(k.vmlinuz, iso_root / "boot" / f"vmlinuz-{k.name}")
         isobuild.build_initramfs(kvers[k.name], mkinitcpio_conf, iso_root / "boot" / f"initramfs-{k.name}.img")
 
+    if has_splash:
+        grubcfg.normalize_splash(splash_source, splash_dest)
+
     grub_cfg_dest = iso_root / "boot" / "grub" / "grub.cfg"
     grub_cfg_dest.parent.mkdir(parents=True, exist_ok=True)
-    grub_cfg_dest.write_text(grubcfg.build_grub_cfg([k.name for k in selected], constants.ISO_VOLID))
+    grub_cfg_dest.write_text(
+        grubcfg.build_grub_cfg([k.name for k in selected], constants.ISO_VOLID, has_splash=has_splash)
+    )
 
     isobuild.prepare_bios_boot(iso_root)
     isobuild.prepare_efi_boot(iso_root, cfg.workdir)

@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import excludes, permissions, sanitize, seed
+from . import calamares, excludes, permissions, sanitize, seed
 
 
 @dataclass
@@ -47,12 +47,14 @@ def resolve_plan(
 
 
 def build_overlay(plan: BuildPlan) -> None:
-    """Populates plan.overlay_dir for reset mode: the seeded demo home,
-    umask-normalized, then the sanitized passwd/shadow/group/etc written
-    last (each self-chmod'd -- see sanitize.py -- so write order relative
-    to normalize() doesn't matter for their permissions)."""
+    """Populates plan.overlay_dir for reset mode: the seeded demo home and
+    (if configured) custom Calamares branding, umask-normalized, then the
+    sanitized passwd/shadow/group/etc written last (each self-chmod'd --
+    see sanitize.py -- so write order relative to normalize() doesn't
+    matter for their permissions)."""
     if plan.mode != "reset":
         return
     seed.seed_demo_home(plan.overlay_dir)
+    calamares.build_calamares_branding(plan.overlay_dir)
     permissions.normalize(plan.overlay_dir)
     sanitize.write_sanitized_files(plan.overlay_dir)

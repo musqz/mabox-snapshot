@@ -10,7 +10,26 @@ kernel, booting straight from the ISO9660 filesystem via the miso hook
 
 from __future__ import annotations
 
+import subprocess
+from pathlib import Path
+
 from . import constants
+
+# GRUB draws a background at whatever native size the image is -- a source
+# photo with the wrong aspect ratio just looks stretched/cropped oddly.
+# Normalizing every splash to one fixed canvas (crop-to-fill, then pad)
+# means it looks right regardless of what the user dropped in the images
+# folder. `magick`, never `convert` (deprecated since IMv7).
+SPLASH_SIZE = "1920x1080"
+
+
+def build_splash_command(source: Path, dest: Path, size: str = SPLASH_SIZE) -> list[str]:
+    return ["magick", str(source), "-resize", f"{size}^", "-gravity", "center", "-extent", size, str(dest)]
+
+
+def normalize_splash(source: Path, dest: Path, size: str = SPLASH_SIZE) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(build_splash_command(source, dest, size), check=True)
 
 
 def _menu_entry(kernel_name: str, misolabel: str) -> str:
@@ -23,7 +42,7 @@ def _menu_entry(kernel_name: str, misolabel: str) -> str:
     )
 
 
-def build_grub_cfg(kernel_names: list[str], misolabel: str = constants.ISO_VOLID) -> str:
+def build_grub_cfg(kernel_names: list[str], misolabel: str = constants.ISO_VOLID, has_splash: bool = False) -> str:
     if not kernel_names:
         raise ValueError("at least one kernel is required to generate a boot menu")
 
@@ -33,7 +52,9 @@ def build_grub_cfg(kernel_names: list[str], misolabel: str = constants.ISO_VOLID
         "insmod all_video",
         "insmod gfxterm",
         "terminal_output gfxterm",
-        "",
     ]
+    if has_splash:
+        lines += ["insmod png", "background_image /boot/grub/splash.png"]
+    lines.append("")
     lines += [_menu_entry(name, misolabel) for name in kernel_names]
     return "\n".join(lines) + "\n"

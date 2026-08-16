@@ -49,7 +49,7 @@ DEMO_GID = 1000
 DEMO_BASELINE_GROUPS = ["wheel", "audio", "video", "storage", "optical", "network"]
 
 REQUIRED_TOOLS = ["mksquashfs", "xorriso", "grub-mkimage", "mkinitcpio", "mkfs.fat", "rsync", "openssl"]
-OPTIONAL_TOOLS = ["calamares", "yay"]
+OPTIONAL_TOOLS = ["calamares", "yay", "magick"]
 
 SUPPORTED_DEMO_LANGS = ["en", "es", "pl"]
 DEFAULT_DEMO_LANG = "en"
@@ -74,3 +74,19 @@ MKINITCPIO_MISO_HOOKS = [
     "miso_pxe_common", "miso_pxe_http", "miso_pxe_nbd", "miso_pxe_nfs",
     "miso_kms", "modconf", "block", "filesystems", "keyboard", "keymap",
 ]
+
+# User-editable branding source, same convention as EXCLUDES_LIST_FILE
+# (plain directory under /etc/mabox-snapshot, no separate per-user split).
+# Verified on this host: the *installed* calamares package already ships a
+# complete, safe settings.conf + module confs at CALAMARES_SETTINGS_FILE's
+# directory (git.maboxlinux.org has no Mabox-specific Calamares repo, so
+# there's nothing to vendor there -- Mabox installs just inherit stock
+# Manjaro branding unless this tool overrides it). This tool only ever
+# swaps *which branding component* settings.conf points at; the install
+# sequence itself (partition/bootloader/users/...) is never touched.
+IMAGES_DIR = Path("/etc/mabox-snapshot/images")
+CALAMARES_SETTINGS_FILE = Path("/usr/share/calamares/settings.conf")
+CALAMARES_BRANDING_COMPONENT = "mabox"
+MABOX_LOGO_SVG = MABOX_SKEL_DIR / ".icons" / "mabox-logo-square.svg"
+DEFAULT_CALAMARES_PRODUCT_NAME = "Mabox Linux"
+DEFAULT_TEXT_RADIUS = 8
