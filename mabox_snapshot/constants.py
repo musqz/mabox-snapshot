@@ -48,8 +48,29 @@ DEMO_UID = 1000
 DEMO_GID = 1000
 DEMO_BASELINE_GROUPS = ["wheel", "audio", "video", "storage", "optical", "network"]
 
-REQUIRED_TOOLS = ["mksquashfs", "xorriso", "grub-mkimage", "rsync", "openssl"]
+REQUIRED_TOOLS = ["mksquashfs", "xorriso", "grub-mkimage", "mkinitcpio", "mkfs.fat", "rsync", "openssl"]
 OPTIONAL_TOOLS = ["calamares", "yay"]
 
 SUPPORTED_DEMO_LANGS = ["en", "es", "pl"]
 DEFAULT_DEMO_LANG = "en"
+
+# ISO boot layout, modeled on Manjaro's own miso hook (verified on this host
+# at /etc/initcpio/hooks/miso -- misobasedir defaults to "manjaro" there if
+# unset, but every build below passes it explicitly to avoid relying on that
+# default). ISO_VOLID doubles as the misolabel= kernel param so the live
+# hook can find its boot device via /dev/disk/by-label/<volid>.
+MISO_BASEDIR = "mabox"
+ISO_VOLID = "MABOX_LIVE"
+ISO_ARCH = "x86_64"
+
+GRUB_LIB_DIR = Path("/usr/lib/grub")
+
+# Verified at /usr/share/manjaro-tools/mkinitcpio.conf (manjaro-tools-iso-git
+# package) -- the exact HOOKS/MODULES a live ISO's initramfs needs for the
+# miso boot hook to run.
+MKINITCPIO_MISO_MODULES = ["loop", "dm-snapshot"]
+MKINITCPIO_MISO_HOOKS = [
+    "base", "udev", "miso_shutdown", "miso", "miso_loop_mnt",
+    "miso_pxe_common", "miso_pxe_http", "miso_pxe_nbd", "miso_pxe_nfs",
+    "miso_kms", "modconf", "block", "filesystems", "keyboard", "keymap",
+]

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from mabox_snapshot import kernels
 
 
@@ -48,3 +50,24 @@ def test_find_kernel_by_name(tmp_path):
 
     assert found is not None and found.name == "linux618"
     assert missing is None
+
+
+def _fake_kernel(name="linux618"):
+    return kernels.KernelInfo(
+        name=name, preset_path=Path("preset"), vmlinuz=Path("vmlinuz"), default_image=Path("image")
+    )
+
+
+def test_module_version_parses_pacman_ql_output():
+    fake_output = (
+        "linux618 /usr/lib/modules/\n"
+        "linux618 /usr/lib/modules/6.18.44-1-MANJARO/\n"
+        "linux618 /usr/lib/modules/6.18.44-1-MANJARO/kernel/\n"
+    )
+    version = kernels.module_version(_fake_kernel(), query=lambda pkg: fake_output)
+    assert version == "6.18.44-1-MANJARO"
+
+
+def test_module_version_returns_none_when_not_found():
+    version = kernels.module_version(_fake_kernel(), query=lambda pkg: "")
+    assert version is None

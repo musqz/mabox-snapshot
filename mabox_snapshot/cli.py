@@ -10,7 +10,7 @@ from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
-from . import config, constants, excludes, kernels, overlay, packages, permissions, privilege, squashfs
+from . import config, constants, excludes, grubcfg, isobuild, kernels, overlay, packages, permissions, privilege, squashfs
 from . import workdir as workdir_mod
 from . import __version__
 
@@ -104,22 +104,51 @@ def cmd_create(args: argparse.Namespace) -> int:
     else:
         selected = detected[-1:]  # newest-sorted preset by default; --kernel/--all-kernels overrides
 
+    kvers = {}
+    for k in selected:
+        kver = kernels.module_version(k)
+        if kver is None:
+            print(f"error: could not resolve {k.name!r} to a /usr/lib/modules/<version> (pacman -Ql {k.name})", file=sys.stderr)
+            return 1
+        kvers[k.name] = kver
+
     output_dir = cfg.output_dir or cfg.workdir
     stamp = datetime.now().strftime("%Y-%m" if cfg.month else "%Y-%m-%d-%H%M")
     iso_name = args.iso_name or f"mabox-{args.mode}-{stamp}"
-    dest = output_dir / f"{iso_name}.sfs"
+    dest = output_dir / f"{iso_name}.iso"
+
+    iso_root = cfg.workdir / "iso"
+    sfs_dest = iso_root / constants.MISO_BASEDIR / constants.ISO_ARCH / "rootfs.sfs"
+    mkinitcpio_conf = cfg.workdir / "mkinitcpio-miso.conf"
     exclude_file = cfg.workdir / "exclude.list" if plan.exclude_patterns else None
-    cmd = squashfs.build_command(plan.sources, dest, exclude_file, cfg.compression, cfg.compression_level)
+
+    sfs_cmd = squashfs.build_command(plan.sources, sfs_dest, exclude_file, cfg.compression, cfg.compression_level)
+    initramfs_cmds = [
+        isobuild.build_mkinitcpio_command(
+            kvers[k.name], mkinitcpio_conf, iso_root / "boot" / f"initramfs-{k.name}.img"
+        )
+        for k in selected
+    ]
+    bios_cmd = isobuild.build_bios_boot_command(iso_root / "boot" / "grub" / "i386-pc")
+    efi_cmd = isobuild.build_efi_boot_command(
+        cfg.workdir / "grub-x86_64-efi", iso_root / "efi" / "boot" / "bootx64.efi"
+    )
+    xorriso_cmd = isobuild.build_xorriso_command(iso_root, dest, constants.ISO_VOLID)
 
     print(f"mode:        {plan.mode}")
     print(f"sources:     {', '.join(str(s) for s in plan.sources)}")
     print(f"excludes:    {len(plan.exclude_patterns)} pattern(s)")
-    print(f"kernels:     {', '.join(k.name for k in selected)}")
+    print(f"kernels:     {', '.join(f'{k.name} ({kvers[k.name]})' for k in selected)}")
     level = f" (level {cfg.compression_level})" if cfg.compression_level is not None else ""
     print(f"compression: {cfg.compression}{level}")
     print(f"workdir:     {cfg.workdir}")
     print(f"output:      {dest}")
-    print(f"command:     {' '.join(str(c) for c in cmd)}")
+    print(f"squashfs:    {' '.join(str(c) for c in sfs_cmd)}")
+    for cmd in initramfs_cmds:
+        print(f"initramfs:   {' '.join(str(c) for c in cmd)}")
+    print(f"bios boot:   {' '.join(str(c) for c in bios_cmd)}")
+    print(f"efi boot:    {' '.join(str(c) for c in efi_cmd)}")
+    print(f"assemble:    {' '.join(str(c) for c in xorriso_cmd)}")
 
     if args.dry_run:
         return 0
@@ -140,10 +169,12 @@ def cmd_create(args: argparse.Namespace) -> int:
 
     workdir_mod.ensure_workdir(cfg.workdir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    sfs_dest.parent.mkdir(parents=True, exist_ok=True)
 
-    # No staging copy exists to size precisely (mksquashfs reads live '/' directly) --
-    # approximate the compressed output as half of root's used bytes.
-    required_bytes = int(shutil.disk_usage("/").used * 0.5)
+    # No staging copy exists to size precisely (mksquashfs reads live '/' directly).
+    # The final ISO embeds the same bytes again (ISO9660 is a monolithic image, not
+    # a reference format), so budget for the squashfs plus a same-sized ISO.
+    required_bytes = int(shutil.disk_usage("/").used * 0.5) * 2
     try:
         workdir_mod.check_free_space(cfg.workdir, required_bytes, skip=cfg.skip_space_check)
     except workdir_mod.InsufficientSpaceError as e:
@@ -152,12 +183,25 @@ def cmd_create(args: argparse.Namespace) -> int:
 
     if exclude_file is not None:
         excludes.write_mksquashfs_exclude_file(plan.exclude_patterns, exclude_file)
+    squashfs.build(plan.sources, sfs_dest, exclude_file, cfg.compression, cfg.compression_level)
 
-    squashfs.build(plan.sources, dest, exclude_file, cfg.compression, cfg.compression_level)
+    (iso_root / "boot").mkdir(parents=True, exist_ok=True)
+    isobuild.write_mkinitcpio_conf(mkinitcpio_conf)
+    for k in selected:
+        shutil.copy2(k.vmlinuz, iso_root / "boot" / f"vmlinuz-{k.name}")
+        isobuild.build_initramfs(kvers[k.name], mkinitcpio_conf, iso_root / "boot" / f"initramfs-{k.name}.img")
+
+    grub_cfg_dest = iso_root / "boot" / "grub" / "grub.cfg"
+    grub_cfg_dest.parent.mkdir(parents=True, exist_ok=True)
+    grub_cfg_dest.write_text(grubcfg.build_grub_cfg([k.name for k in selected], constants.ISO_VOLID))
+
+    isobuild.prepare_bios_boot(iso_root)
+    isobuild.prepare_efi_boot(iso_root, cfg.workdir)
+    isobuild.assemble(iso_root, dest, constants.ISO_VOLID)
     permissions.normalize(cfg.workdir)
 
-    print(f"squashfs written to {dest}")
-    print("note: ISO assembly (xorriso/GRUB) is not implemented yet -- this is a staging artifact only.")
+    print(f"ISO written to {dest}")
+    print("note: boot this in a VM before trusting it -- BIOS+UEFI hybrid boot is not self-verifying.")
     return 0
 
 

@@ -10,6 +10,7 @@ package name, so linux-lts/linux-zen work the same way if present.
 from __future__ import annotations
 
 import re
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -17,6 +18,7 @@ MKINITCPIO_PRESET_DIR = Path("/etc/mkinitcpio.d")
 
 _KVER_RE = re.compile(r'^\s*ALL_kver\s*=\s*"([^"]+)"', re.MULTILINE)
 _IMAGE_RE = re.compile(r'^\s*default_image\s*=\s*"([^"]+)"', re.MULTILINE)
+_MODULES_DIR_RE = re.compile(r"/usr/lib/modules/([^/\s]+)/$")
 
 
 @dataclass(frozen=True)
@@ -58,4 +60,22 @@ def find_kernel(name: str, preset_dir: Path = MKINITCPIO_PRESET_DIR) -> KernelIn
     for kernel in detect_installed_kernels(preset_dir):
         if kernel.name == name:
             return kernel
+    return None
+
+
+def _default_pacman_ql(package: str) -> str:
+    result = subprocess.run(["pacman", "-Ql", package], capture_output=True, text=True)
+    return result.stdout if result.returncode == 0 else ""
+
+
+def module_version(kernel: KernelInfo, query=_default_pacman_ql) -> str | None:
+    """Correlates a kernel preset to its /usr/lib/modules/<version>/ dir via
+    `pacman -Ql <package>` (verified: package name matches preset name --
+    linux618 owns /usr/lib/modules/6.18.44-1-MANJARO/). mkinitcpio -k needs
+    this exact version string; the preset's own ALL_kver is a vmlinuz path,
+    not a version. `query` is injectable so this is testable without pacman."""
+    for line in query(kernel.name).splitlines():
+        match = _MODULES_DIR_RE.search(line.strip())
+        if match:
+            return match.group(1)
     return None
