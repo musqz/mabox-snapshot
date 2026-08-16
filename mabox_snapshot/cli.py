@@ -6,8 +6,12 @@ import argparse
 import os
 import shutil
 import sys
+from dataclasses import replace
+from datetime import datetime
+from pathlib import Path
 
-from . import config, constants, excludes, kernels, packages
+from . import config, constants, excludes, kernels, overlay, packages, permissions, privilege, squashfs
+from . import workdir as workdir_mod
 from . import __version__
 
 
@@ -50,6 +54,111 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
         print("[warn] no installed kernels detected via mkinitcpio presets")
 
     return 0 if ok else 1
+
+
+def _apply_create_overrides(cfg: config.SnapshotConfig, args: argparse.Namespace) -> config.SnapshotConfig:
+    overrides = {}
+    if args.workdir is not None:
+        overrides["workdir"] = args.workdir
+    if args.output_dir is not None:
+        overrides["output_dir"] = args.output_dir
+    if args.compression is not None:
+        overrides["compression"] = args.compression
+    if args.compression_level is not None:
+        overrides["compression_level"] = args.compression_level
+    if args.exclude_list is not None:
+        overrides["exclude_list"] = args.exclude_list
+    if args.exclude_folder:
+        overrides["exclude_folders"] = tuple(args.exclude_folder)
+    if args.kernel is not None:
+        overrides["kernel"] = args.kernel
+    if args.all_kernels:
+        overrides["all_kernels"] = True
+    if args.skip_space_check:
+        overrides["skip_space_check"] = True
+    if args.keep_workdir:
+        overrides["keep_workdir"] = True
+    if args.month:
+        overrides["month"] = True
+    return replace(cfg, **overrides)
+
+
+def cmd_create(args: argparse.Namespace) -> int:
+    cfg = _apply_create_overrides(config.load(), args)
+
+    plan = overlay.resolve_plan(args.mode, cfg.workdir, cfg.exclude_list, cfg.exclude_folders)
+
+    detected = kernels.detect_installed_kernels()
+    if not detected:
+        print("error: no installed kernel detected (checked /etc/mkinitcpio.d/*.preset)", file=sys.stderr)
+        return 1
+    if cfg.all_kernels:
+        selected = detected
+    elif cfg.kernel:
+        match = kernels.find_kernel(cfg.kernel)
+        if match is None:
+            names = ", ".join(k.name for k in detected)
+            print(f"error: kernel {cfg.kernel!r} not found (installed: {names})", file=sys.stderr)
+            return 1
+        selected = [match]
+    else:
+        selected = detected[-1:]  # newest-sorted preset by default; --kernel/--all-kernels overrides
+
+    output_dir = cfg.output_dir or cfg.workdir
+    stamp = datetime.now().strftime("%Y-%m" if cfg.month else "%Y-%m-%d-%H%M")
+    iso_name = args.iso_name or f"mabox-{args.mode}-{stamp}"
+    dest = output_dir / f"{iso_name}.sfs"
+    exclude_file = cfg.workdir / "exclude.list" if plan.exclude_patterns else None
+    cmd = squashfs.build_command(plan.sources, dest, exclude_file, cfg.compression, cfg.compression_level)
+
+    print(f"mode:        {plan.mode}")
+    print(f"sources:     {', '.join(str(s) for s in plan.sources)}")
+    print(f"excludes:    {len(plan.exclude_patterns)} pattern(s)")
+    print(f"kernels:     {', '.join(k.name for k in selected)}")
+    level = f" (level {cfg.compression_level})" if cfg.compression_level is not None else ""
+    print(f"compression: {cfg.compression}{level}")
+    print(f"workdir:     {cfg.workdir}")
+    print(f"output:      {dest}")
+    print(f"command:     {' '.join(str(c) for c in cmd)}")
+
+    if args.dry_run:
+        return 0
+
+    try:
+        privilege.require_root("mabox-snapshot create")
+    except privilege.NotRootError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+
+    if args.mode == "reset":
+        print(
+            "error: reset mode is not implemented yet -- use --dry-run to preview, "
+            "or run --mode preserving",
+            file=sys.stderr,
+        )
+        return 1
+
+    workdir_mod.ensure_workdir(cfg.workdir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # No staging copy exists to size precisely (mksquashfs reads live '/' directly) --
+    # approximate the compressed output as half of root's used bytes.
+    required_bytes = int(shutil.disk_usage("/").used * 0.5)
+    try:
+        workdir_mod.check_free_space(cfg.workdir, required_bytes, skip=cfg.skip_space_check)
+    except workdir_mod.InsufficientSpaceError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+
+    if exclude_file is not None:
+        excludes.write_mksquashfs_exclude_file(plan.exclude_patterns, exclude_file)
+
+    squashfs.build(plan.sources, dest, exclude_file, cfg.compression, cfg.compression_level)
+    permissions.normalize(cfg.workdir)
+
+    print(f"squashfs written to {dest}")
+    print("note: ISO assembly (xorriso/GRUB) is not implemented yet -- this is a staging artifact only.")
+    return 0
 
 
 def cmd_packages_list(args: argparse.Namespace) -> int:
@@ -136,6 +245,23 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("version", help="Print the version").set_defaults(func=cmd_version)
     sub.add_parser("doctor", help="Check prerequisites, read-only").set_defaults(func=cmd_doctor)
+
+    create_parser = sub.add_parser("create", help="Build a snapshot")
+    create_parser.add_argument("--mode", choices=["preserving", "reset"], required=True)
+    create_parser.add_argument("-w", "--workdir", type=Path)
+    create_parser.add_argument("-o", "--skip-space-check", action="store_true")
+    create_parser.add_argument("-m", "--month", action="store_true", help="Name the output by year-month instead of a full timestamp")
+    create_parser.add_argument("--output-dir", type=Path)
+    create_parser.add_argument("--iso-name")
+    create_parser.add_argument("--compression", choices=squashfs.SUPPORTED_COMPRESSORS)
+    create_parser.add_argument("--compression-level", type=int)
+    create_parser.add_argument("--exclude-list", type=Path)
+    create_parser.add_argument("--exclude-folder", action="append", default=[], choices=constants.NAMED_FOLDERS)
+    create_parser.add_argument("--kernel")
+    create_parser.add_argument("--all-kernels", action="store_true")
+    create_parser.add_argument("--dry-run", action="store_true", help="Print the resolved plan and command, execute nothing")
+    create_parser.add_argument("--keep-workdir", action="store_true")
+    create_parser.set_defaults(func=cmd_create)
 
     config_parser = sub.add_parser("config", help="Inspect or edit configuration")
     config_sub = config_parser.add_subparsers(dest="config_command", required=True)
