@@ -6,7 +6,7 @@ import argparse
 import shutil
 import sys
 
-from . import config, constants, excludes
+from . import config, constants, excludes, kernels, packages
 from . import __version__
 
 
@@ -42,7 +42,31 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
     free_gib = usage.free / (1024**3)
     print(f"[info] {free_gib:.1f} GiB free at {constants.DEFAULT_WORKDIR.parent}")
 
+    detected = kernels.detect_installed_kernels()
+    if detected:
+        print(f"[info] {len(detected)} kernel(s) detected: {', '.join(k.name for k in detected)}")
+    else:
+        print("[warn] no installed kernels detected via mkinitcpio presets")
+
     return 0 if ok else 1
+
+
+def cmd_packages_list(args: argparse.Namespace) -> int:
+    if args.which in ("explicit", "all"):
+        for pkg in packages.explicit_packages():
+            print(pkg)
+    if args.which in ("aur", "local", "all"):
+        report = packages.split_foreign_packages(packages.foreign_packages())
+        if args.which == "aur":
+            for pkg in report.aur_reproducible:
+                print(pkg)
+        elif args.which == "local":
+            for pkg in report.local_only:
+                print(pkg)
+        else:
+            for pkg in report.aur_reproducible + report.local_only:
+                print(pkg)
+    return 0
 
 
 def cmd_config_show(_args: argparse.Namespace) -> int:
@@ -133,6 +157,18 @@ def build_parser() -> argparse.ArgumentParser:
     remove_parser = excludes_sub.add_parser("remove", help="Remove a pattern")
     remove_parser.add_argument("pattern")
     remove_parser.set_defaults(func=cmd_excludes_remove)
+
+    packages_parser = sub.add_parser("packages", help="Inspect installed packages")
+    packages_sub = packages_parser.add_subparsers(dest="packages_command", required=True)
+    list_parser = packages_sub.add_parser("list", help="List packages, read-only, no root")
+    list_parser.add_argument(
+        "--explicit", dest="which", action="store_const", const="explicit", default="explicit",
+        help="Explicit repo packages (default)",
+    )
+    list_parser.add_argument("--aur", dest="which", action="store_const", const="aur")
+    list_parser.add_argument("--local", dest="which", action="store_const", const="local")
+    list_parser.add_argument("--all", dest="which", action="store_const", const="all")
+    list_parser.set_defaults(func=cmd_packages_list)
 
     return parser
 
