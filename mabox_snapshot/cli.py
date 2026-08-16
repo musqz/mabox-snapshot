@@ -207,9 +207,10 @@ def cmd_create(args: argparse.Namespace) -> int:
 
     grub_cfg_dest = iso_root / "boot" / "grub" / "grub.cfg"
     grub_cfg_dest.parent.mkdir(parents=True, exist_ok=True)
-    grub_cfg_dest.write_text(
-        grubcfg.build_grub_cfg([k.name for k in selected], constants.ISO_VOLID, has_splash=has_splash)
-    )
+    # detect_installed_kernels() sorts oldest-first; reverse so grub's default
+    # entry (index 0, see grubcfg.build_grub_cfg) boots the newest kernel.
+    menu_kernel_names = [k.name for k in reversed(selected)]
+    grub_cfg_dest.write_text(grubcfg.build_grub_cfg(menu_kernel_names, constants.ISO_VOLID, has_splash=has_splash))
 
     isobuild.prepare_bios_boot(iso_root)
     isobuild.prepare_efi_boot(iso_root, cfg.workdir)
