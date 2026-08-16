@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import sys
 
@@ -174,6 +175,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    os.umask(0o022)  # belt-and-suspenders on top of permissions.normalize()
     parser = build_parser()
     args = parser.parse_args(argv)
     return args.func(args)
