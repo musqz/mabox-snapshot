@@ -1,6 +1,6 @@
 pkgbase = mabox-snapshot-git
 	pkgdesc = Snapshot a running Mabox Linux system into a bootable live/install ISO
-	pkgver = r1.5a47ea6
+	pkgver = r21.1d4ad03
 	pkgrel = 1
 	url = https://github.com/musqz/mabox-snapshot
 	arch = any
@@ -15,6 +15,7 @@ pkgbase = mabox-snapshot-git
 	depends = libisoburn
 	depends = grub
 	depends = mkinitcpio
+	depends = mkinitcpio-nfs-utils
 	depends = dosfstools
 	depends = rsync
 	depends = openssl

@@ -12,6 +12,7 @@ depends=(
     'libisoburn'
     'grub'
     'mkinitcpio'
+    'mkinitcpio-nfs-utils'
     'dosfstools'
     'rsync'
     'openssl'
