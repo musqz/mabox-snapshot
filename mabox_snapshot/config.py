@@ -26,6 +26,7 @@ class SnapshotConfig:
     month: bool = False
     max_age_days: int | None = None
     change_threshold_mb: int = 200
+    encrypt: bool = False
 
 
 def _load_toml(path: Path) -> dict:

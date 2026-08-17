@@ -59,7 +59,7 @@ DEMO_GID = 1000
 DEMO_BASELINE_GROUPS = ["wheel", "audio", "video", "storage", "optical", "network"]
 
 REQUIRED_TOOLS = ["mksquashfs", "xorriso", "grub-mkimage", "mkinitcpio", "mkfs.fat", "rsync", "openssl"]
-OPTIONAL_TOOLS = ["calamares", "yay", "magick"]
+OPTIONAL_TOOLS = ["calamares", "yay", "magick", "cryptsetup"]
 
 SUPPORTED_DEMO_LANGS = ["en", "es", "pl"]
 DEFAULT_DEMO_LANG = "en"
@@ -84,6 +84,36 @@ MKINITCPIO_MISO_HOOKS = [
     "miso_pxe_common", "miso_pxe_http", "miso_pxe_nbd", "miso_pxe_nfs",
     "miso_kms", "modconf", "block", "filesystems", "keyboard", "keymap",
 ]
+
+# --encrypt builds only (preserving mode, opt-in): a wholly separate hook
+# name and HOOKS/MODULES pair from the ones above -- never both listed
+# together -- so this new, root-and-VM-only-verifiable path can't regress
+# the already-working unencrypted boot chain. See mabox_snapshot/luks.py
+# and configs/initcpio/{hooks,install}/miso_luks (a modified copy of the
+# stock miso hook, not a hook layered before it -- the decrypt step has to
+# happen inside miso_mount_handler()'s per-layer loop).
+MKINITCPIO_MISO_LUKS_MODULES = ["loop", "dm-snapshot", "dm-crypt"]
+MKINITCPIO_MISO_LUKS_HOOKS = [
+    "base", "udev", "miso_shutdown", "miso_luks", "miso_loop_mnt",
+    "miso_pxe_common", "miso_pxe_http", "miso_pxe_nbd", "miso_pxe_nfs",
+    "miso_kms", "modconf", "block", "filesystems", "keyboard", "keymap",
+]
+
+# Installed by packaging/PKGBUILD alongside the package itself -- the only
+# signal cli.py has that an --encrypt build is possible on this host (same
+# precedent as seed.py's MABOX_SKEL_DIR check).
+MISO_LUKS_HOOK_INSTALLED = Path("/usr/lib/initcpio/hooks/miso_luks")
+
+# Deliberately different from the plaintext "rootfs.sfs" name so the boot
+# hook can unambiguously tell, from the filename alone, which case it's in.
+LUKS_CONTAINER_SUFFIX = ".luks"
+
+# dm-crypt mapper name -- used only transiently during the build (luks.py
+# opens then closes it; never left attached) and hardcoded identically in
+# configs/initcpio/hooks/miso_luks's _mnt_luks_sfs() for the boot-time
+# open. The two never share a process, so this constant is a single
+# source of truth to keep the shell copy in sync with, not a runtime link.
+ISO_LUKS_MAPPER_NAME = "mabox_rootfs"
 
 # User-editable branding source, same convention as EXCLUDES_LIST_FILE
 # (plain directory under /etc/mabox-snapshot, no separate per-user split).

@@ -23,12 +23,13 @@ from . import constants
 MKINITCPIO_CONF_TEMPLATE = 'MODULES=({modules})\nHOOKS=({hooks})\nCOMPRESSION="xz"\n'
 
 
-def write_mkinitcpio_conf(dest: Path) -> Path:
+def write_mkinitcpio_conf(
+    dest: Path,
+    modules: list[str] = constants.MKINITCPIO_MISO_MODULES,
+    hooks: list[str] = constants.MKINITCPIO_MISO_HOOKS,
+) -> Path:
     dest.write_text(
-        MKINITCPIO_CONF_TEMPLATE.format(
-            modules=" ".join(constants.MKINITCPIO_MISO_MODULES),
-            hooks=" ".join(constants.MKINITCPIO_MISO_HOOKS),
-        )
+        MKINITCPIO_CONF_TEMPLATE.format(modules=" ".join(modules), hooks=" ".join(hooks))
     )
     return dest
 

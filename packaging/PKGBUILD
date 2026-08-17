@@ -20,6 +20,7 @@ optdepends=(
     'calamares: install-from-live-ISO support'
     'imagemagick: GRUB splash / Calamares branding image normalization'
     'yay: AUR-reproducibility check for foreign packages'
+    'cryptsetup: --encrypt LUKS2-encrypted preserving-mode ISOs'
 )
 makedepends=('git' 'python-build' 'python-installer' 'python-hatchling')
 checkdepends=('python-pytest')
@@ -55,6 +56,11 @@ package() {
 
     mkdir -p "$pkgdir/usr/share/mabox-snapshot/mabox-skel"
     cp -a configs/mabox-skel/skel "$pkgdir/usr/share/mabox-snapshot/mabox-skel/skel"
+
+    install -Dm644 configs/initcpio/hooks/miso_luks \
+        "$pkgdir/usr/lib/initcpio/hooks/miso_luks"
+    install -Dm644 configs/initcpio/install/miso_luks \
+        "$pkgdir/usr/lib/initcpio/install/miso_luks"
 
     install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 

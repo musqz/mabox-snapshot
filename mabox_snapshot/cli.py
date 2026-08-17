@@ -10,7 +10,7 @@ from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
-from . import calamares, changes, config, constants, excludes, grubcfg, history, isobuild, kernels, overlay, packages, permissions, privilege, retention, squashfs
+from . import calamares, changes, config, constants, excludes, grubcfg, history, isobuild, kernels, luks, overlay, packages, permissions, privilege, retention, squashfs
 from . import workdir as workdir_mod
 from . import __version__
 
@@ -84,11 +84,17 @@ def _apply_create_overrides(cfg: config.SnapshotConfig, args: argparse.Namespace
         overrides["max_age_days"] = args.max_age_days
     if args.change_threshold_mb is not None:
         overrides["change_threshold_mb"] = args.change_threshold_mb
+    if args.encrypt:
+        overrides["encrypt"] = True
     return replace(cfg, **overrides)
 
 
 def cmd_create(args: argparse.Namespace) -> int:
     cfg = _apply_create_overrides(config.load(), args)
+
+    if cfg.encrypt and args.mode == "reset":
+        print("error: --encrypt is not supported with --mode reset (reset mode only ever contains the synthetic demo account)", file=sys.stderr)
+        return 1
 
     plan = overlay.resolve_plan(args.mode, cfg.workdir, cfg.exclude_list, cfg.exclude_folders)
 
@@ -122,7 +128,14 @@ def cmd_create(args: argparse.Namespace) -> int:
     dest = output_dir / f"{iso_name}.iso"
 
     iso_root = cfg.workdir / "iso"
-    sfs_dest = iso_root / constants.MISO_BASEDIR / constants.ISO_ARCH / "rootfs.sfs"
+    if cfg.encrypt:
+        # Plaintext squashfs stays in workdir, never under iso_root -- the
+        # ISO tree only ever gets the encrypted container (see luks.py).
+        sfs_dest = cfg.workdir / "rootfs.sfs"
+        sfs_luks_dest = iso_root / constants.MISO_BASEDIR / constants.ISO_ARCH / f"rootfs.sfs{constants.LUKS_CONTAINER_SUFFIX}"
+    else:
+        sfs_dest = iso_root / constants.MISO_BASEDIR / constants.ISO_ARCH / "rootfs.sfs"
+        sfs_luks_dest = None
     mkinitcpio_conf = cfg.workdir / "mkinitcpio-miso.conf"
     exclude_file = cfg.workdir / "exclude.list" if plan.exclude_patterns else None
 
@@ -154,6 +167,7 @@ def cmd_create(args: argparse.Namespace) -> int:
     print(f"workdir:     {cfg.workdir}")
     print(f"output:      {dest}")
     print(f"squashfs:    {' '.join(str(c) for c in sfs_cmd)}")
+    print(f"encryption:  {'LUKS2 (rootfs.sfs.luks, passphrase prompted at build time)' if cfg.encrypt else 'none'}")
     for cmd in initramfs_cmds:
         print(f"initramfs:   {' '.join(str(c) for c in cmd)}")
     if has_splash:
@@ -176,9 +190,20 @@ def cmd_create(args: argparse.Namespace) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 1
 
+    passphrase = None
+    if cfg.encrypt:
+        try:
+            luks.check_hook_installed()
+        except FileNotFoundError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 1
+        passphrase = luks.prompt_for_passphrase()
+
     workdir_mod.ensure_workdir(cfg.workdir)
     output_dir.mkdir(parents=True, exist_ok=True)
     sfs_dest.parent.mkdir(parents=True, exist_ok=True)
+    if cfg.encrypt:
+        sfs_luks_dest.parent.mkdir(parents=True, exist_ok=True)
 
     # No staging copy exists to size precisely (mksquashfs reads live '/' directly).
     # The final ISO embeds the same bytes again (ISO9660 is a monolithic image, not
@@ -188,6 +213,8 @@ def cmd_create(args: argparse.Namespace) -> int:
     # mount -- e.g. an external drive -- in which case it needs its own check).
     squashfs_estimate = int(shutil.disk_usage("/").used * 0.5)
     workdir_required = squashfs_estimate if output_dir != cfg.workdir else squashfs_estimate * 2
+    if cfg.encrypt:
+        workdir_required += squashfs_estimate  # plaintext temp + encrypted container coexist briefly
     try:
         workdir_mod.check_free_space(cfg.workdir, workdir_required, skip=cfg.skip_space_check)
         if output_dir != cfg.workdir:
@@ -226,9 +253,14 @@ def cmd_create(args: argparse.Namespace) -> int:
     if exclude_file is not None:
         excludes.write_mksquashfs_exclude_file(plan.exclude_patterns, exclude_file)
     squashfs.build(plan.sources, sfs_dest, exclude_file, cfg.compression, cfg.compression_level)
+    if cfg.encrypt:
+        luks.encrypt_squashfs(sfs_dest, sfs_luks_dest, passphrase)
 
     (iso_root / "boot").mkdir(parents=True, exist_ok=True)
-    isobuild.write_mkinitcpio_conf(mkinitcpio_conf)
+    if cfg.encrypt:
+        isobuild.write_mkinitcpio_conf(mkinitcpio_conf, constants.MKINITCPIO_MISO_LUKS_MODULES, constants.MKINITCPIO_MISO_LUKS_HOOKS)
+    else:
+        isobuild.write_mkinitcpio_conf(mkinitcpio_conf)
     for k in selected:
         shutil.copy2(k.vmlinuz, iso_root / "boot" / f"vmlinuz-{k.name}")
         isobuild.build_initramfs(kvers[k.name], mkinitcpio_conf, iso_root / "boot" / f"initramfs-{k.name}.img")
@@ -373,6 +405,7 @@ def build_parser() -> argparse.ArgumentParser:
     create_parser.add_argument("--keep-workdir", action="store_true")
     create_parser.add_argument("--max-age-days", type=int, help="Delete older mabox-*.iso files in the output dir after a successful build")
     create_parser.add_argument("--change-threshold-mb", type=int, help="Prompt about home-dir items new/grown by at least this many MiB since the last snapshot (default 200)")
+    create_parser.add_argument("--encrypt", action="store_true", help="Encrypt rootfs.sfs with LUKS2 (preserving mode only; passphrase prompted interactively at build time)")
     create_parser.set_defaults(func=cmd_create)
 
     config_parser = sub.add_parser("config", help="Inspect or edit configuration")

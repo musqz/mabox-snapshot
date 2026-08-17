@@ -21,6 +21,7 @@ pkgbase = mabox-snapshot-git
 	optdepends = calamares: install-from-live-ISO support
 	optdepends = imagemagick: GRUB splash / Calamares branding image normalization
 	optdepends = yay: AUR-reproducibility check for foreign packages
+	optdepends = cryptsetup: --encrypt LUKS2-encrypted preserving-mode ISOs
 	provides = mabox-snapshot
 	conflicts = mabox-snapshot
 	backup = etc/mabox-snapshot/excludes.list
