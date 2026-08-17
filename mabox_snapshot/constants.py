@@ -37,18 +37,19 @@ PACMAN_CONF = Path("/etc/pacman.conf")
 PACMAN_MIRRORLIST = Path("/etc/pacman.d/mirrorlist")
 FSTAB_FILE = Path("/etc/fstab")
 
-# Reset-mode-only: files replaced with sanitized versions in the overlay, or
-# excluded outright. Paths are relative to '/', matching mksquashfs -ef.
-RESET_MODE_REPLACED_FILES = [
+# Reset-mode-only: excluded from the rootfs layer outright, then replaced
+# with sanitized versions from the overlay layer (see sanitize.py) --
+# excluded here too, not just overridden, so the real password hashes are
+# never present on the ISO at all, not merely shadowed by the boot-time
+# overlay. Paths are relative to '/', matching mksquashfs -ef.
+RESET_MODE_ONLY_EXCLUDES = [
+    "home/*",
     "etc/passwd",
     "etc/shadow",
     "etc/gshadow",
     "etc/group",
     "etc/subuid",
     "etc/subgid",
-]
-RESET_MODE_ONLY_EXCLUDES = [
-    "home/*",
     "etc/machine-id",
     "etc/NetworkManager/system-connections/*",
 ]

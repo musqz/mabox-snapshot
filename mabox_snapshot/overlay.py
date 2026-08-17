@@ -1,10 +1,19 @@
-"""The central architectural decision: mksquashfs accepts multiple source
-directories in one invocation, later sources overriding earlier ones for
-identical paths. Preserving mode squashes '/' directly. Reset mode
-squashes '/' (with /home and account files excluded) plus a small
-purpose-built overlay directory holding only the sanitized replacements
-and the synthetic demo account -- never a full-filesystem staging copy,
-never overlayfs/bind-mount tricks.
+"""The central architectural decision: each build produces one or more
+INDEPENDENT, single-source squashfs layers, never a single mksquashfs
+invocation given multiple source directories. That multi-source form was
+the original design here, but mksquashfs's -ef exclude patterns silently
+stop matching anything once given more than one source (verified
+empirically -- a real, since-fixed bug: reset-mode builds were shipping
+the full, unsanitized live system, home directory included, with every
+exclude pattern silently inert). Single-source excludes work correctly,
+so preserving mode squashes '/' alone into one "rootfs" layer, and reset
+mode squashes '/' (with /home and account files excluded) and the small
+sanitized overlay directory into TWO separate layers ("rootfs" and
+"desktopfs"). They are never merged at build time -- they merge at BOOT
+time instead, via the existing miso initramfs hook's own overlayfs
+layering (livefs/mhwdfs/desktopfs/rootfs, already unmodified stock
+behaviour -- "desktopfs" was already one of its four recognized layer
+names, so reset mode needs no boot-side changes at all to pick this up).
 """
 
 from __future__ import annotations
@@ -16,10 +25,16 @@ from . import calamares, excludes, permissions, sanitize, seed
 
 
 @dataclass
+class BuildLayer:
+    name: str  # "rootfs" or "desktopfs" -- must be a name the miso hook recognizes
+    source: Path
+    exclude_patterns: list[str]
+
+
+@dataclass
 class BuildPlan:
     mode: str
-    sources: list[Path]
-    exclude_patterns: list[str]
+    layers: list[BuildLayer]
     overlay_dir: Path | None  # None in preserving mode
 
 
@@ -33,17 +48,16 @@ def resolve_plan(
         raise ValueError(f"unknown mode: {mode!r}")
 
     patterns = excludes.resolve_excludes(mode, exclude_list_path, exclude_folders)
+    rootfs_layer = BuildLayer(name="rootfs", source=Path("/"), exclude_patterns=patterns)
 
     if mode == "preserving":
-        return BuildPlan(mode=mode, sources=[Path("/")], exclude_patterns=patterns, overlay_dir=None)
+        return BuildPlan(mode=mode, layers=[rootfs_layer], overlay_dir=None)
 
     overlay_dir = workdir / "overlay"
-    return BuildPlan(
-        mode=mode,
-        sources=[Path("/"), overlay_dir],
-        exclude_patterns=patterns,
-        overlay_dir=overlay_dir,
-    )
+    # No excludes needed here: this directory only ever contains what
+    # seed.py/sanitize.py/calamares.py themselves wrote, nothing to filter.
+    desktop_layer = BuildLayer(name="desktopfs", source=overlay_dir, exclude_patterns=[])
+    return BuildPlan(mode=mode, layers=[rootfs_layer, desktop_layer], overlay_dir=overlay_dir)
 
 
 def build_overlay(plan: BuildPlan) -> None:
