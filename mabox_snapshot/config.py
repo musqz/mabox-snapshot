@@ -25,6 +25,7 @@ class SnapshotConfig:
     keep_workdir: bool = False
     month: bool = False
     max_age_days: int | None = None
+    change_threshold_mb: int = 200
 
 
 def _load_toml(path: Path) -> dict:

@@ -10,7 +10,7 @@ from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
-from . import calamares, config, constants, excludes, grubcfg, history, isobuild, kernels, overlay, packages, permissions, privilege, retention, squashfs
+from . import calamares, changes, config, constants, excludes, grubcfg, history, isobuild, kernels, overlay, packages, permissions, privilege, retention, squashfs
 from . import workdir as workdir_mod
 from . import __version__
 
@@ -82,6 +82,8 @@ def _apply_create_overrides(cfg: config.SnapshotConfig, args: argparse.Namespace
         overrides["month"] = True
     if args.max_age_days is not None:
         overrides["max_age_days"] = args.max_age_days
+    if args.change_threshold_mb is not None:
+        overrides["change_threshold_mb"] = args.change_threshold_mb
     return replace(cfg, **overrides)
 
 
@@ -194,6 +196,27 @@ def cmd_create(args: argparse.Namespace) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 1
 
+    # Best-effort: compares this run's home-dir scan against the last stored
+    # manifest and, interactively, offers to exclude anything new/grown past
+    # cfg.change_threshold_mb (see changes.py). A failure here (no SUDO_USER,
+    # no prior history yet) must never block the build -- current_entries
+    # stays None and write_manifest() below falls back to scanning itself.
+    current_entries = None
+    try:
+        home = privilege.resolve_home_dir()
+        current_entries = history.scan_home_entries(home)
+        previous = history.latest(1)
+        if previous:
+            threshold_bytes = cfg.change_threshold_mb * 1024 * 1024
+            changed = changes.diff_entries(previous[0].entries, current_entries, threshold_bytes)
+            new_excludes = changes.prompt_for_exclusions(changed, home)
+            if new_excludes:
+                plan.exclude_patterns.extend(new_excludes)
+                if exclude_file is None:
+                    exclude_file = cfg.workdir / "exclude.list"
+    except Exception as e:
+        print(f"warning: change notification skipped: {e}", file=sys.stderr)
+
     try:
         overlay.build_overlay(plan)  # no-op for preserving mode
     except FileNotFoundError as e:
@@ -236,7 +259,7 @@ def cmd_create(args: argparse.Namespace) -> int:
     # SUDO_USER unset) must warn, not abort -- deliberately not the usual
     # try/except + print error + return 1 idiom used above.
     try:
-        history.write_manifest(dest, args.mode)
+        history.write_manifest(dest, args.mode, entries=current_entries)
     except Exception as e:
         print(f"warning: snapshot history not recorded: {e}", file=sys.stderr)
 
@@ -349,6 +372,7 @@ def build_parser() -> argparse.ArgumentParser:
     create_parser.add_argument("--dry-run", action="store_true", help="Print the resolved plan and command, execute nothing")
     create_parser.add_argument("--keep-workdir", action="store_true")
     create_parser.add_argument("--max-age-days", type=int, help="Delete older mabox-*.iso files in the output dir after a successful build")
+    create_parser.add_argument("--change-threshold-mb", type=int, help="Prompt about home-dir items new/grown by at least this many MiB since the last snapshot (default 200)")
     create_parser.set_defaults(func=cmd_create)
 
     config_parser = sub.add_parser("config", help="Inspect or edit configuration")

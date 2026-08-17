@@ -108,6 +108,19 @@ def test_write_manifest_round_trip(tmp_path):
     assert record.entries == history.scan_home_entries(home)
 
 
+def test_write_manifest_uses_precomputed_entries_without_scanning(tmp_path):
+    history_dir = tmp_path / "history"
+    dest = tmp_path / "mabox-preserving-2026-08-17-1432.iso"
+    precomputed = [history.HistoryEntry(name="Videos", type="dir", size_bytes=123)]
+
+    # No `home` passed at all -- if write_manifest tried to scan, this would
+    # raise via resolve_home_dir() (no SUDO_USER in the test environment).
+    history.write_manifest(dest, "preserving", history_dir=history_dir, entries=precomputed)
+
+    [record] = history.list_history(history_dir)
+    assert record.entries == precomputed
+
+
 def test_write_manifest_creates_history_dir_if_missing(tmp_path):
     home = tmp_path / "home"
     home.mkdir()
