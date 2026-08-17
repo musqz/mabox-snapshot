@@ -130,16 +130,28 @@ def cmd_create(args: argparse.Namespace) -> int:
     dest = output_dir / f"{iso_name}.iso"
 
     iso_root = cfg.workdir / "iso"
-    if cfg.encrypt:
-        # Plaintext squashfs stays in workdir, never under iso_root -- the
-        # ISO tree only ever gets the encrypted container (see luks.py).
-        sfs_dest = cfg.workdir / "rootfs.sfs"
-        sfs_luks_dest = iso_root / constants.MISO_BASEDIR / constants.ISO_ARCH / f"rootfs.sfs{constants.LUKS_CONTAINER_SUFFIX}"
-    else:
-        sfs_dest = iso_root / constants.MISO_BASEDIR / constants.ISO_ARCH / "rootfs.sfs"
-        sfs_luks_dest = None
     mkinitcpio_conf = cfg.workdir / "mkinitcpio-miso.conf"
-    exclude_file = cfg.workdir / "exclude.list" if plan.exclude_patterns else None
+
+    # Per-layer destinations (see overlay.py's module docstring for why
+    # each layer is built by its own single-source mksquashfs invocation).
+    # --encrypt only ever applies to preserving mode's sole "rootfs" layer
+    # (validated above): its plaintext squashfs stays in workdir, never
+    # under iso_root -- the ISO tree only ever gets the encrypted
+    # container (see luks.py).
+    layer_dest = {}
+    layer_luks_dest = {}
+    for layer in plan.layers:
+        if cfg.encrypt and layer.name == "rootfs":
+            layer_dest[layer.name] = cfg.workdir / f"{layer.name}.sfs"
+            layer_luks_dest[layer.name] = (
+                iso_root / constants.MISO_BASEDIR / constants.ISO_ARCH / f"{layer.name}.sfs{constants.LUKS_CONTAINER_SUFFIX}"
+            )
+        else:
+            layer_dest[layer.name] = iso_root / constants.MISO_BASEDIR / constants.ISO_ARCH / f"{layer.name}.sfs"
+    exclude_files = {
+        layer.name: (cfg.workdir / f"exclude-{layer.name}.list" if layer.exclude_patterns else None)
+        for layer in plan.layers
+    }
 
     splash_source = constants.IMAGES_DIR / "splash.png"
     has_splash = splash_source.exists()
@@ -147,7 +159,12 @@ def cmd_create(args: argparse.Namespace) -> int:
 
     branding = calamares.load_branding() if args.mode == "reset" else None
 
-    sfs_cmd = squashfs.build_command(plan.sources, sfs_dest, exclude_file, cfg.compression, cfg.compression_level)
+    layer_cmds = {
+        layer.name: squashfs.build_command(
+            [layer.source], layer_dest[layer.name], exclude_files[layer.name], cfg.compression, cfg.compression_level
+        )
+        for layer in plan.layers
+    }
     initramfs_cmds = [
         isobuild.build_mkinitcpio_command(
             kvers[k.name], mkinitcpio_conf, iso_root / "boot" / f"initramfs-{k.name}.img"
@@ -161,14 +178,15 @@ def cmd_create(args: argparse.Namespace) -> int:
     xorriso_cmd = isobuild.build_xorriso_command(iso_root, dest, constants.ISO_VOLID)
 
     print(f"mode:        {plan.mode}")
-    print(f"sources:     {', '.join(str(s) for s in plan.sources)}")
-    print(f"excludes:    {len(plan.exclude_patterns)} pattern(s)")
+    for layer in plan.layers:
+        print(f"source:      [{layer.name}] {layer.source} ({len(layer.exclude_patterns)} exclude pattern(s))")
     print(f"kernels:     {', '.join(f'{k.name} ({kvers[k.name]})' for k in selected)}")
     level = f" (level {cfg.compression_level})" if cfg.compression_level is not None else ""
     print(f"compression: {cfg.compression}{level}")
     print(f"workdir:     {cfg.workdir}")
     print(f"output:      {dest}")
-    print(f"squashfs:    {' '.join(str(c) for c in sfs_cmd)}")
+    for layer in plan.layers:
+        print(f"squashfs:    [{layer.name}] {' '.join(str(c) for c in layer_cmds[layer.name])}")
     print(f"encryption:  {'LUKS2 (rootfs.sfs.luks, passphrase prompted at build time)' if cfg.encrypt else 'none'}")
     for cmd in initramfs_cmds:
         print(f"initramfs:   {' '.join(str(c) for c in cmd)}")
@@ -208,9 +226,10 @@ def cmd_create(args: argparse.Namespace) -> int:
 
     workdir_mod.ensure_workdir(cfg.workdir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    sfs_dest.parent.mkdir(parents=True, exist_ok=True)
-    if cfg.encrypt:
-        sfs_luks_dest.parent.mkdir(parents=True, exist_ok=True)
+    for layer in plan.layers:
+        layer_dest[layer.name].parent.mkdir(parents=True, exist_ok=True)
+        if layer.name in layer_luks_dest:
+            layer_luks_dest[layer.name].parent.mkdir(parents=True, exist_ok=True)
 
     # No staging copy exists to size precisely (mksquashfs reads live '/' directly).
     # The final ISO embeds the same bytes again (ISO9660 is a monolithic image, not
@@ -245,9 +264,13 @@ def cmd_create(args: argparse.Namespace) -> int:
             changed = changes.diff_entries(previous[0].entries, current_entries, threshold_bytes)
             new_excludes = changes.prompt_for_exclusions(changed, home)
             if new_excludes:
-                plan.exclude_patterns.extend(new_excludes)
-                if exclude_file is None:
-                    exclude_file = cfg.workdir / "exclude.list"
+                # Always the rootfs layer (plan.layers[0] in both modes):
+                # it's the only layer whose source is the live filesystem
+                # this scan just walked.
+                rootfs_layer = plan.layers[0]
+                rootfs_layer.exclude_patterns.extend(new_excludes)
+                if exclude_files[rootfs_layer.name] is None:
+                    exclude_files[rootfs_layer.name] = cfg.workdir / f"exclude-{rootfs_layer.name}.list"
     except Exception as e:
         print(f"warning: change notification skipped: {e}", file=sys.stderr)
 
@@ -257,11 +280,12 @@ def cmd_create(args: argparse.Namespace) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 1
 
-    if exclude_file is not None:
-        excludes.write_mksquashfs_exclude_file(plan.exclude_patterns, exclude_file)
-    squashfs.build(plan.sources, sfs_dest, exclude_file, cfg.compression, cfg.compression_level)
-    if cfg.encrypt:
-        luks.encrypt_squashfs(sfs_dest, sfs_luks_dest, passphrase)
+    for layer in plan.layers:
+        if exclude_files[layer.name] is not None:
+            excludes.write_mksquashfs_exclude_file(layer.exclude_patterns, exclude_files[layer.name])
+        squashfs.build([layer.source], layer_dest[layer.name], exclude_files[layer.name], cfg.compression, cfg.compression_level)
+        if cfg.encrypt and layer.name == "rootfs":
+            luks.encrypt_squashfs(layer_dest[layer.name], layer_luks_dest[layer.name], passphrase)
 
     (iso_root / "boot").mkdir(parents=True, exist_ok=True)
     if cfg.encrypt:
