@@ -15,6 +15,12 @@ NAMED_FOLDERS = ["Desktop", "Documents", "Downloads", "Music", "Pictures", "Vide
 
 DEFAULT_WORKDIR = Path("/var/lib/mabox-snapshot/work")
 
+# Per-run snapshot manifests (see history.py) -- one small hand-written TOML
+# file per successful `create`, named after its ISO's own filename stem.
+# Same /var/lib placement as DEFAULT_WORKDIR: runtime-generated state, not
+# user config.
+HISTORY_DIR = Path("/var/lib/mabox-snapshot/history")
+
 # Installed by the package (see packaging/PKGBUILD); vendored copies live in
 # configs/ during development.
 SHARE_DIR = Path("/usr/share/mabox-snapshot")

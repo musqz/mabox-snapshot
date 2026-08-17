@@ -10,7 +10,7 @@ from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
-from . import calamares, config, constants, excludes, grubcfg, isobuild, kernels, overlay, packages, permissions, privilege, squashfs
+from . import calamares, config, constants, excludes, grubcfg, history, isobuild, kernels, overlay, packages, permissions, privilege, squashfs
 from . import workdir as workdir_mod
 from . import __version__
 
@@ -222,6 +222,16 @@ def cmd_create(args: argparse.Namespace) -> int:
     permissions.normalize(iso_root)
 
     print(f"ISO written to {dest}")
+
+    # Best-effort only: the ISO is already written and is the primary
+    # deliverable, so a manifest failure (e.g. /var/lib full/unwritable, or
+    # SUDO_USER unset) must warn, not abort -- deliberately not the usual
+    # try/except + print error + return 1 idiom used above.
+    try:
+        history.write_manifest(dest, args.mode)
+    except Exception as e:
+        print(f"warning: snapshot history not recorded: {e}", file=sys.stderr)
+
     print("note: boot this in a VM before trusting it -- BIOS+UEFI hybrid boot is not self-verifying.")
     return 0
 
