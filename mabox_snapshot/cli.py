@@ -98,7 +98,8 @@ def cmd_create(args: argparse.Namespace) -> int:
         print("error: --encrypt is not supported with --mode reset (reset mode only ever contains the synthetic demo account)", file=sys.stderr)
         return 1
 
-    plan = overlay.resolve_plan(args.mode, cfg.workdir, cfg.exclude_list, cfg.exclude_folders)
+    output_dir = cfg.output_dir or cfg.workdir
+    plan = overlay.resolve_plan(args.mode, cfg.workdir, cfg.exclude_list, cfg.exclude_folders, output_dir=output_dir)
 
     detected = kernels.detect_installed_kernels()
     if not detected:
@@ -124,7 +125,6 @@ def cmd_create(args: argparse.Namespace) -> int:
             return 1
         kvers[k.name] = kver
 
-    output_dir = cfg.output_dir or cfg.workdir
     stamp = datetime.now().strftime("%Y-%m" if cfg.month else "%Y-%m-%d-%H%M")
     iso_name = args.iso_name or f"{constants.ISO_NAME_PREFIX}{args.mode}-{stamp}"
     dest = output_dir / f"{iso_name}.iso"
