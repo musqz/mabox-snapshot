@@ -17,3 +17,10 @@ dist/
 *.iso
 *.iso.sha256
 .mabox-snapshot-work/
+
+# Arch packaging artifacts (makepkg run locally from packaging/)
+packaging/src/
+packaging/pkg/
+packaging/mabox-snapshot/
+packaging/*.pkg.tar.zst
+packaging/*.pkg.tar.xz
