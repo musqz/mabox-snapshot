@@ -21,7 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import calamares, excludes, permissions, sanitize, seed
+from . import calamares, constants, excludes, permissions, sanitize, seed
 
 
 @dataclass
@@ -61,12 +61,15 @@ def resolve_plan(
     exclude_list_path: Path,
     exclude_folders: tuple[str, ...] = (),
     output_dir: Path | None = None,
+    mounts_file: Path | None = None,
 ) -> BuildPlan:
     if mode not in ("preserving", "reset"):
         raise ValueError(f"unknown mode: {mode!r}")
 
     patterns = excludes.resolve_excludes(mode, exclude_list_path, exclude_folders)
     patterns += _self_exclude_patterns(workdir, output_dir or workdir)
+    patterns += excludes.detect_foreign_mount_excludes(mounts=mounts_file or constants.MOUNTS_FILE)
+    patterns = list(dict.fromkeys(patterns))  # dedup across the three sources above, keep order
     rootfs_layer = BuildLayer(name="rootfs", source=Path("/"), exclude_patterns=patterns)
 
     if mode == "preserving":
