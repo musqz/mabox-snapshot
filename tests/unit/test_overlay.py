@@ -52,6 +52,33 @@ def test_resolve_plan_reset_desktopfs_layer_has_no_excludes(tmp_path):
     assert desktopfs.exclude_patterns == []
 
 
+def test_resolve_plan_rootfs_layer_excludes_its_own_workdir(tmp_path):
+    """Regression guard: the rootfs layer's source is '/' itself, so
+    without this, mksquashfs recurses into its own workdir -- including
+    the .sfs file it's writing, mid-write, growing every time it's
+    re-read. Drove a real multi-hundred-GB runaway build."""
+    exclude_list = tmp_path / "excludes.list"
+    exclude_list.write_text("")
+    workdir = tmp_path / "var" / "lib" / "mabox-snapshot" / "work"
+
+    plan = overlay.resolve_plan("preserving", workdir, exclude_list)
+
+    expected = f"{workdir.relative_to('/')}/*"
+    assert expected in plan.layers[0].exclude_patterns
+
+
+def test_resolve_plan_rootfs_layer_excludes_separate_output_dir(tmp_path):
+    exclude_list = tmp_path / "excludes.list"
+    exclude_list.write_text("")
+    workdir = tmp_path / "work"
+    output_dir = tmp_path / "external" / "Mabox-Snapshots"
+
+    plan = overlay.resolve_plan("preserving", workdir, exclude_list, output_dir=output_dir)
+
+    assert f"{workdir.relative_to('/')}/*" in plan.layers[0].exclude_patterns
+    assert f"{output_dir.relative_to('/')}/*" in plan.layers[0].exclude_patterns
+
+
 def test_resolve_plan_rejects_unknown_mode(tmp_path):
     with pytest.raises(ValueError):
         overlay.resolve_plan("bogus", tmp_path / "work", tmp_path / "excludes.list")

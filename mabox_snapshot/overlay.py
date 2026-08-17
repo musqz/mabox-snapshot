@@ -38,16 +38,35 @@ class BuildPlan:
     overlay_dir: Path | None  # None in preserving mode
 
 
+def _self_exclude_patterns(*dirs: Path) -> list[str]:
+    """The rootfs layer's source is '/' itself, so without this, mksquashfs
+    would recurse into the tool's own workdir/output-dir -- including the
+    very .sfs file it's writing, mid-write, growing every time it's
+    re-read (this is what actually drove at least one real multi-hundred-
+    GB runaway build, previously misattributed entirely to the exclude-
+    pattern bug this module's docstring describes). Paths are relative to
+    '/', matching mksquashfs -ef; dedup by rendered pattern since workdir
+    and output_dir are often the same directory."""
+    rendered = []
+    for d in dirs:
+        pattern = f"{d.relative_to('/')}/*"
+        if pattern not in rendered:
+            rendered.append(pattern)
+    return rendered
+
+
 def resolve_plan(
     mode: str,
     workdir: Path,
     exclude_list_path: Path,
     exclude_folders: tuple[str, ...] = (),
+    output_dir: Path | None = None,
 ) -> BuildPlan:
     if mode not in ("preserving", "reset"):
         raise ValueError(f"unknown mode: {mode!r}")
 
     patterns = excludes.resolve_excludes(mode, exclude_list_path, exclude_folders)
+    patterns += _self_exclude_patterns(workdir, output_dir or workdir)
     rootfs_layer = BuildLayer(name="rootfs", source=Path("/"), exclude_patterns=patterns)
 
     if mode == "preserving":
