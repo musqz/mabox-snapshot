@@ -1,0 +1,17 @@
+item_radius          = 0
+item_border          = 0
+sep_height           = 5
+sep_halign = left
+menu_gradient_pos=right
+color_menu_bg = #e6e6e0 90
+color_menu_bg_to = #e6e6e0 100
+color_menu_border = #5F8A45 100
+#color_norm_bg        = #2b303b 0
+color_norm_fg = #22221c 100
+color_sel_bg = #4c4c4c 100
+color_sel_fg = #ffffff 100
+color_sel_border = #4c4c4c 100
+color_sep_fg = #a6a6a6 100
+color_title_bg = #4c4c4c 100
+color_title_fg = #FFFFFF 100
+color_title_border = #4c4c4c 100

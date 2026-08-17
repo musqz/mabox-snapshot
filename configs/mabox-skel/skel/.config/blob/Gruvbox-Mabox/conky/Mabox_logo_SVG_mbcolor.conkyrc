@@ -1,0 +1,27 @@
+conky.config = {
+-- WINDOW
+    own_window = true,
+    own_window_type = 'desktop',
+    own_window_transparent = true,
+    own_window_hints = 'undecorated,below,skip_taskbar,skip_pager,sticky',
+    own_window_class = 'Conky-nobg',
+    own_window_title = 'Mabox Logo SVG',
+    
+    alignment = 'top_left',
+    gap_x = 30,
+    gap_y = 60,
+    minimum_height = 96,
+    minimum_width = 96,
+    template0 = [[~/.icons/mabox-logo-circle.svg]],
+    template1 = [[96x96]],
+    
+    background = true,
+    no_buffers = true,
+    imlib_cache_size = 0,
+    double_buffer = true,
+    update_interval = 1,
+};
+
+conky.text = [[
+${image ${template0} -s ${template1}}
+]];

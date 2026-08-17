@@ -1,0 +1,19 @@
+# Claude Code / AI assistant local instructions — never committed
+CLAUDE.md
+claude.md
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Local dev output (ISOs, workdirs) if built from a repo checkout
+*.iso
+*.iso.sha256
+.mabox-snapshot-work/

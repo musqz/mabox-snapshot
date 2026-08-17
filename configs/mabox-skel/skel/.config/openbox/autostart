@@ -1,0 +1,53 @@
+## Mabox Autostart File
+##
+##
+##
+## Note that global autostart .desktop files will also be in
+## /etc/xdg/openbox/autostart and ~/.config/autostart.
+## These will include applications such as the Network Manager, Picom
+##
+## Turn on/off system beep.
+xset b off
+
+## If you like NumLock on uncomment liene below
+#numlockx &
+
+## Resolution
+#xrandr --output VGA-1 --primary --mode 1600x900 --pos 0x0 --rotate normal
+#xrandr --output VGA-1 --primary --mode 1920x1080 --pos 0x0 --rotate normal
+
+## Copy Language files for Mabox - only for first run
+/usr/bin/mabox-langfiles &
+
+## Set keyboard settings - 250 ms delay and 25 cps (characters per second) repeat rate.
+## Adjust the values according to your preferances.
+#xset r rate 250 25
+
+## Switch keyboard layouts by Alt+Shift
+## Example below: US an Greek layouts
+#setxkbmap -layout "us,gr" -option "grp:alt_shift_toggle" &
+
+## Alias Super key to Super+Space for single-key menu.
+## See 'man xcape' for other possibilities.
+xcape -e 'Super_L=Super_L|space'
+
+
+/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1 &
+
+## Background
+fehbg --restore &
+
+## Panel
+(sleep 1s && mb-tint2-session) &
+
+
+
+## Optionally enable file manager in daemon mode for automounting
+(sleep 1s && pcmanfm -d) &
+
+## Optionally disable touchpad
+#/usr/bin/synclient TouchpadOff=1 &
+
+
+## Mabox scripts - DO NOT DISABLE 
+(sleep 1s && mabox-obstart startopenbox) &

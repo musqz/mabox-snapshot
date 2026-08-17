@@ -1,0 +1,7 @@
+<b>Collection Name: CyberPunk_Neon</b>	
+Provided by Mabox Linux 21.06 Geralt
+
+Wallpaper set by Nitrogen:\n/usr/share/backgrounds/Cyberpunk-Neon-Wallpaper.jpg;\n
+Openbox theme:  Mabox-Cyberpunk-Neon\n
+GTK theme:  Mabox-Cyberpunk-Neon\n
+Running Tint2:\t\n\t~.config/tint2/mabox2001neon.tint2rc\n

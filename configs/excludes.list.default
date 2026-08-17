@@ -1,0 +1,65 @@
+# mabox-snapshot exclude list
+# One path-glob per line, relative to '/', no leading slash.
+# Blank lines and lines starting with # are ignored.
+# This file persists across package upgrades (see PKGBUILD backup=()).
+
+# Virtual / runtime filesystems
+dev/*
+proc/*
+sys/*
+run/*
+tmp/*
+var/tmp/*
+mnt/*
+media/*
+lost+found
+
+# Host-specific files that make no sense in a snapshot (both modes)
+etc/fstab
+etc/mtab
+etc/crypttab
+etc/adjtime
+etc/ssh/ssh_host_*
+etc/X11/xorg.conf*
+
+# Package manager state and cache
+var/cache/pacman/pkg/*
+var/lib/pacman/sync/*
+var/cache/pamac/*
+var/lib/pamac/*
+
+# Logs and crash dumps
+var/log/*
+var/lib/systemd/coredump/*
+var/crash/*
+
+# Home-dir bloat: safe to drop, regenerated automatically by the app that
+# made it. Curated per-app, not a blanket wipe of .cache or .var -- e.g.
+# .cache itself is NOT excluded, since it also holds small state files
+# some apps expect to survive (fontconfig cache, gtk icon cache, etc);
+# only known-large, safely-disposable subpaths are listed here. This is
+# the gap MX Linux's own mx-snapshot has too (confirmed by reading its
+# real mx-snapshot-exclude.list): .var isn't trimmed there either. Only
+# meaningful in preserving mode -- reset mode already excludes all of
+# home/* wholesale (see RESET_MODE_ONLY_EXCLUDES), so these are harmless,
+# redundant no-ops there.
+home/*/.cache/mozilla/firefox/*/cache2/*
+home/*/.cache/mozilla/firefox/*/thumbnails/*
+home/*/.mozilla/firefox/*/cache2/*
+home/*/.cache/librewolf/*/cache2/*
+home/*/.librewolf/*/cache2/*
+home/*/.cache/chromium/Default/Cache/*
+home/*/.cache/chromium/Default/Code Cache/*
+home/*/.cache/BraveSoftware/*/Default/Cache/*
+home/*/.cache/thumbnails/*
+home/*/.thumbnails/*
+home/*/.local/share/Trash/*
+home/*/.Trash*
+home/*/.bash_history
+home/*/.lesshst
+home/*/.local/share/recently-used.xbel
+home/*/.recently-used.xbel
+# Flatpak: only the per-app cache dir, per Flatpak's own app/<id>/{cache,
+# config,data} convention -- data/ and config/ (real app state, not
+# regenerable) are left untouched.
+home/*/.var/app/*/cache/*

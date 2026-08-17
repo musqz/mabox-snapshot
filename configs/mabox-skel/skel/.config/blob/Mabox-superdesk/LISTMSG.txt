@@ -1,0 +1,7 @@
+<b>Collection Name: Mabox-superdesk</b>	
+Provided by Mabox 20.08 Dijkstra
+
+Wallpaper set by Nitrogen:\n/usr/share/backgrounds/mabox-lumo.jpg;\n
+Openbox theme:  Mabox-superdesk\n
+GTK theme:  Mabox-superdesk\n
+Running Tint2s:\t\n\t~/.config/tint2/mabox2111.tint2rc\n

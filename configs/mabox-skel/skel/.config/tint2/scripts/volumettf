@@ -1,0 +1,26 @@
+#!/bin/bash
+# Tint2 volume executor with ttf icons
+
+active_sink=$(LANG=C pactl get-default-sink)
+muted=$(LANG=C pactl list sinks | grep -A14 -P "$active_sink" | awk '/Mute:/{print $2}')
+vol=$(LANG=C pactl list sinks | grep -A14 -P "$active_sink" | awk '/Volume: front-left:/{print $5}' | cut -f1 -d'%')
+
+if [[ $muted = "no" ]]; then
+    if [[ $vol -ge 80 ]]; then
+        echo "墳<sup><span size='xx-small'> $vol%</span></sup>"
+    elif [[ $vol -ge 70 ]]; then
+            echo "墳<sup><span size='xx-small'> $vol%</span></sup>"
+    elif [[ $vol -ge 60 ]]; then
+            echo "奔<sup><span size='xx-small'> $vol%</span></sup>"
+    elif [[ $vol -ge 50 ]]; then
+            echo "奔<sup><span size='xx-small'> $vol%</span></sup>"
+    elif [[ $vol -ge 30 ]]; then
+            echo "奔<sup><span size='xx-small'> $vol%</span></sup>"
+    elif [[ $vol -ge 10 ]]; then
+            echo "奄<sup><span size='xx-small'> $vol%</span></sup>"
+    elif [[ $vol -ge 0 ]]; then
+            echo "奄<sup><span size='xx-small'> $vol%</span></sup>"
+    fi
+else
+    echo "婢<sup><span size='xx-small'> $vol%</span></sup>"
+fi

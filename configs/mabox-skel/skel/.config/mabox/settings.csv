@@ -1,0 +1,34 @@
+^sep(Preferences)
+Mabox Control Center,mcc,distributor-logo-mabox
+^sep(Tint2 Panel)
+Add/remove launchers...,jgtint2launcher,tint2
+Tint2 panels,^pipe(jgtint2-pipe),tint2conf
+^sep(Mabox Themes)
+Theme manager,mb-obthemes,preferences-desktop-theme
+^sep(Desktop)
+Wallpaper,jgwallpaperchanger -s,nitrogen
+Configure <b>Fonts</b>,colorizer-fonts -s,fonts
+Colorizer Menu,colorizer -s,colorizer
+Look and Feel,lxappearance,preferences-desktop-theme
+Reload GTK,reload-gtk,reload
+^sep()
+Menu/Sidepanels,^pipe(jgmenusettings-pipe),menu-editor
+Conkies,colorizer-conky -s,desktop-effects
+Compositor,jgpicom-pipe menu -s,compton
+Notifications,xfce4-notifyd-config,xfce4-notifyd
+^sep()
+Screen resolution,arandr,xfce4-display
+Screen resolution (LXRandR),lxrandr,xfce4-display
+^sep(Settings)
+Preferred applications,exo-preferred-applications,preferences-desktop-default-applications
+Power Manager,xfce4-power-manager-settings,mate-power-manager
+Login Manager settings,lightdm-gtk-greeter-settings-pkexec,lightdm-gtk-greeter-settings
+Mouse and Keyboard,lxinput,mouse
+^sep(Openbox)
+OBconf,obconf-qt,openbox
+Autostart,^checkout(autostart),geany
+RC - configuration file,xdg-open ~/.config/openbox/rc.xml,geany
+Reconfigure Openbox,openbox --reconfigure,openbox
+^sep()
+Edit Settings menu,xdg-open ~/.config/mabox/settings.csv,geany
+

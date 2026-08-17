@@ -1,0 +1,7 @@
+<b>Collection name: Dracula</b>	
+Provided by Mabox 21.11 Herbolth
+
+Wallpaper saved by Nitrogen:\n/usr/share/backgrounds/dracula-base.png;\n
+Openbox theme:  Dracula\n
+GTK theme:  Dracula\n
+Running Tint2s:\t\n\t~/.config/tint2/dracula.tint2rc\n

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Volume Icon
+Comment=Volume Control for your system tray
+Icon=
+Exec=volumeicon
+Terminal=false
+Type=Application
+Hidden=true

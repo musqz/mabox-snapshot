@@ -1,0 +1,15 @@
+item_radius          = 1
+item_border          = 0
+color_menu_border = #1f232b 100
+color_sep_fg = #1f232b 40
+color_title_bg = #1f232b 100
+color_title_border = #2f343f 100
+color_title_fg = #ebcb8b 100
+sep_halign = center
+color_menu_bg = #2f343f 100
+color_menu_bg_to = #2f343f 100
+color_norm_fg = #a8adb5 100
+color_sel_bg = #3B4252 100
+color_sel_border = #A3BE8C 20
+color_sel_fg = #A3BE8C 100
+menu_gradient_pos=top_right

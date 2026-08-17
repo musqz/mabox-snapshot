@@ -1,0 +1,13 @@
+[Desktop Entry]
+Name=Mabox Linux Control Center
+Name[pl]=Centrum Sterowania Mabox Linux
+Name[es]=Centro de Control Mabox Linux
+Comment=Mabox Linux Control Center
+Comment[pl]=Centrum ustawień Mabox Linux
+Comment[es]=Centro de Control Mabox Linux
+Exec=mcc
+Terminal=false
+Type=Application
+Icon=mcc
+Categories=Settings;DesktopSettings;X-LXDE-Settings;X-KDE-Settings;X-XFCE-SettingsDialog;X-XFCE-SystemSettings;
+

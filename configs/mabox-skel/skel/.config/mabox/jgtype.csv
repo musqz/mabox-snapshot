@@ -1,0 +1,23 @@
+^sep(<big><b>jgtype</b></big> - <i>type command helper</i>)
+Updates,^checkout(updates)
+Mirrors and keys,^checkout(mirrors)
+^sep()
+Configure,xdg-open ~/.config/mabox/jgtype.csv
+
+
+
+#TAGS
+^tag(updates)
+^sep(Pacman)
+Update		sudo pacman -Syu,jgtype "sudo pacman -Syu"
+PKG DB refresh + update	sudo pacman -Syyu,jgtype "sudo pacman -Syyu"
+^sep(Yay)
+Update		yay,jgtype "yay"
+PKG DB refresh + update	yay -Syyu,jgtype "yay -Syyu"
+
+^tag(mirrors)
+^sep(Mirrors ranking)
+Fasttrack		sudo pacman-mirrors -f5,jgtype "sudo pacman-mirrors -f5"
+GeoIP	sudo pacman-mirrors -i --geoip, jgtype "sudo pacman-mirrors -i --geoip"
+All		sudo pacman-mirrors -i -c all,jgtype "sudo pacman-mirrors -i -c all"
+

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Exec=terminator -T "Weather Forecast" --geometry=1030x740 -e "curl wttr.in ; read"
+Icon=weather-few-clouds-symbolic
+StartupNotify=true
+Terminal=false
+Type=Application
+Categories=Utility;
+Name=Weather Forecast

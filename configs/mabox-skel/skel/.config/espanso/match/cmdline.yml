@@ -1,0 +1,14 @@
+
+matches:
+  - trigger: topmem
+    replace: "ps -eo pid,ppid,cmd,%mem,%cpu --sort=-%mem | head"
+  - trigger: topcpu
+    replace: "ps -eo pid,ppid,cmd,%mem,%cpu --sort=-%cpu | head"
+  - trigger: ":jctl"
+    replace: journalctl -p 3 -xb
+  - trigger: ":pacu"
+    replace: sudo pacman -Syyu
+  - trigger: ":pacmirr"
+    replace: sudo pacman-mirrors -f5
+  - trigger: ":rr"
+    replace: "curl -s -L https://raw.githubusercontent.com/keroserene/rickrollrc/master/roll.sh | bash"

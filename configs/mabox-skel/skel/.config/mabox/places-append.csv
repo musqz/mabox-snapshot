@@ -1,0 +1,30 @@
+### Your own commands in left sidepanel (ctrl + win + Left Arrow) - BOTTOM
+#
+# Syntax
+# Commands:
+# Label,command,icon (optional)
+#
+# ^sep()  # separator - line
+# ^sep(NAME) # separator 
+#
+# Comment out line to disable
+##########################
+
+^sep(Your own commands)
+<small>  Edit own commands</small>,xdg-open ~/.config/mabox/places-append.csv
+^sep()
+<big></big>  <b>FSearch</b> - <i>file search</i>	<span bgcolor="#333333" color="#d3d3d3"> <small> + /</small> </span>,fsearch
+<big>露</big>    <b>PyRadio</b> - <i>Internet Radio Player</i>	<span bgcolor="#333333" color="#d3d3d3"> <small> + r</small> </span>,terminator --icon=/usr/share/icons/pyradio.png --geometry=564x440-20-20 -x pyradio -lt
+<big>爛</big>    <b>btop</b> - <i>Resource monitor</i>	<span bgcolor="#333333" color="#d3d3d3"> <small> + h</small> </span>,^term(btop)
+<big></big>   System Info (inxi),terminator -T 'inxi system info  (Q to close)' -x bash -c "inxi -Fazy -c2 | less -R"
+<b> Weather</b> forecast,terminator -T "Weather forecast" --geometry=1030x740 -e "curl wttr.in ; read"
+#<b>Terminator</b> <i>(advanced demo)</i>,terminator -m -j ~/.config/terminator/2-3-grid.json
+^sep()
+#Logout Dialog
+^sep()
+ ⏻  Exit...	<span bgcolor="#333333" color="#d3d3d3"> <small> + x</small> </span>,mb-jgtools mblogout,system-shutdown
+^sep()
+
+# or all logout options
+#. ~/.config/mabox/exit.csv
+

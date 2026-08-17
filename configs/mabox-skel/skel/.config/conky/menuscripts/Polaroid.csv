@@ -1,0 +1,7 @@
+# Add your commands here
+# Syntax is simple: Label,command
+# examples:
+Wallmenu,jgwallpaperchanger -d
+
+# If only one command is uncommented it will run, if more commands available menu will be shown
+# to see how it works play with uncomenting examples above and clicking Conky

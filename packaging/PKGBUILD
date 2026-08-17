@@ -1,0 +1,78 @@
+# Maintainer: musqz
+pkgname=mabox-snapshot-git
+pkgver=r1.5a47ea6
+pkgrel=1
+pkgdesc="Snapshot a running Mabox Linux system into a bootable live/install ISO"
+arch=('any')
+url="https://github.com/musqz/mabox-snapshot"
+license=('MIT')
+depends=(
+    'python'
+    'squashfs-tools'
+    'libisoburn'
+    'grub'
+    'mkinitcpio'
+    'dosfstools'
+    'rsync'
+    'openssl'
+)
+optdepends=(
+    'calamares: install-from-live-ISO support'
+    'imagemagick: GRUB splash / Calamares branding image normalization'
+    'yay: AUR-reproducibility check for foreign packages'
+    'cryptsetup: --encrypt LUKS2-encrypted preserving-mode ISOs'
+)
+makedepends=('git' 'python-build' 'python-installer' 'python-hatchling')
+checkdepends=('python-pytest')
+provides=('mabox-snapshot')
+conflicts=('mabox-snapshot')
+backup=('etc/mabox-snapshot/excludes.list')
+source=("git+$url.git")
+sha256sums=('SKIP')
+
+pkgver() {
+    cd "$srcdir/mabox-snapshot"
+    printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+build() {
+    cd "$srcdir/mabox-snapshot"
+    python -m build --wheel --no-isolation
+}
+
+check() {
+    cd "$srcdir/mabox-snapshot"
+    python -m pytest tests/unit/ -q
+}
+
+package() {
+    cd "$srcdir/mabox-snapshot"
+    python -m installer --destdir="$pkgdir" dist/*.whl
+
+    install -Dm644 configs/excludes.list.default \
+        "$pkgdir/usr/share/mabox-snapshot/excludes.list.default"
+    install -Dm644 configs/excludes.list.default \
+        "$pkgdir/etc/mabox-snapshot/excludes.list"
+
+    mkdir -p "$pkgdir/usr/share/mabox-snapshot/mabox-skel"
+    cp -a configs/mabox-skel/skel "$pkgdir/usr/share/mabox-snapshot/mabox-skel/skel"
+
+    install -Dm644 configs/initcpio/hooks/miso_luks \
+        "$pkgdir/usr/lib/initcpio/hooks/miso_luks"
+    install -Dm644 configs/initcpio/install/miso_luks \
+        "$pkgdir/usr/lib/initcpio/install/miso_luks"
+
+    install -Dm644 systemd/system/mabox-snapshot.service \
+        "$pkgdir/usr/lib/systemd/system/mabox-snapshot.service"
+    install -Dm644 systemd/system/mabox-snapshot.timer \
+        "$pkgdir/usr/lib/systemd/system/mabox-snapshot.timer"
+
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+
+    # Umask-safety pass -- see mabox_snapshot/permissions.py's docstring for
+    # why this can't be skipped: mkdir/install calls above are still shaped
+    # by the calling shell's umask.
+    find "$pkgdir" -type d -exec chmod 755 {} +
+    find "$pkgdir" -type f -exec chmod 644 {} +
+    find "$pkgdir/usr/bin" -type f -exec chmod 755 {} + 2>/dev/null || true
+}

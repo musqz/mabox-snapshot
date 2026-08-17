@@ -1,0 +1,7 @@
+<b>Collection name: Gruvbox-Mabox</b>	
+Saved: Tue Nov  9 11:47:30 PM CET 2021
+
+Wallpaper saved by Nitrogen:\n/usr/share/backgrounds/gruvbox.png;\n
+Openbox theme:  gruvbox-mabox\n
+GTK theme:  Gruvbox-Material-Dark\n
+Running Tint2s:\t\n\t~/.config/tint2/gruvbox.tint2rc\n\t~/.config/tint2/gruvbox_launcher.tint2rc\n

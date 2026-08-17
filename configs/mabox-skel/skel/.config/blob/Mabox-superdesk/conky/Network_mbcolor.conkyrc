@@ -1,0 +1,80 @@
+conky.config = {
+-- WINDOW
+	own_window = true,
+	own_window_type = 'desktop',
+	own_window_transparent = true,
+	own_window_hints = 'undecorated,below,skip_taskbar,skip_pager,sticky',
+	own_window_colour = '#142c2c',
+	own_window_class = 'Conky',
+	own_window_title = 'Mabox Network Conky',
+    
+    alignment = 'bottom_right',
+	gap_x = 30,
+	gap_y = 60,
+    minimum_height = 64,
+    minimum_width = 64,
+    	
+-- FONTS
+	use_xft = true,
+	font = 'Ubuntu:size=8',
+	xftalpha = 1,
+	override_utf8_locale = true,
+
+-- COLORS
+	draw_shades = false,
+	default_shade_color = '#000000',
+	draw_outline = false,
+	default_outline_color = '#222222',
+
+	default_color = '#F8F8FF',
+	color0 = '#accdc7',
+    color1 = '#309552',
+    color2 = '#E8CB2D',
+
+-- BORDERS
+	draw_borders = false,
+-- Stippled borders?
+	stippled_borders = 0,
+-- border margins
+	border_inner_margin = 15,
+	border_outer_margin = 1,
+-- border width
+	border_width = 2,
+-- graph borders
+    draw_graph_borders = true,
+
+-- MISC
+-- Boolean value, if true, Conky will be forked to background when started.
+	background = true,
+    short_units = true,
+    
+
+-- Adds spaces around certain objects to stop them from moving other things
+-- around, this only helps if you are using a mono font
+-- Options: right, left or none
+	use_spacer = 'none',
+
+-- Subtract (file system) buffers from used memory?
+	no_buffers = true,
+
+-- Imlib2 image cache size, in bytes. Default 4MiB Increase this value if you use
+-- $image lots. Set to 0 to disable the image cache.
+--imlib_cache_size = 0,
+
+-- Use the Xdbe extension? (eliminates flicker)
+-- It is highly recommended to use own window with this one
+-- so double buffer won't be so big.
+	double_buffer = true,
+	update_interval = 2,
+};
+
+conky.text = [[
+${color0}NETWORK
+${color0}Device ${alignr}${color1}enp0s3
+${color0}IP ${alignr}${color1}${addr enp0s3}
+${color0}Download ${color1}${downspeed enp0s3} ${alignr}${color1}${upspeed enp0s3}${color0} Upload
+${color2}${downspeedgraph enp0s3 30,100 -t} ${alignr} ${upspeedgraph enp0s3 30,100 -t}
+${color0}Total Down ${color1}${totaldown enp0s3} ${alignr}${color1}${totalup enp0s3}${color0} Total Up
+${color0}${hr}${color1}
+${execi 30 netstat -ept | grep ESTAB | awk '{print $9}' | cut -d/ -f2 | sort | uniq | sort -nr}
+]];

@@ -1,0 +1,92 @@
+conky.config = {
+-- WINDOW
+	own_window = true,
+	own_window_type = 'desktop',
+	own_window_transparent = false,
+	own_window_hints = 'undecorated,below,skip_taskbar,skip_pager,sticky',
+	own_window_colour = '#0d081b',
+	own_window_class = 'Conky',
+	own_window_title = 'PCManFM Help Conky',
+    
+    alignment = 'top_left',
+	gap_x = 30,
+	gap_y = 60,
+	minimum_width = 200,
+
+-- FONTS
+	use_xft = true,
+	font = 'Ubuntu:size=8',
+	xftalpha = 1,
+	override_utf8_locale = true,
+
+-- COLORS
+	draw_shades = false,
+	default_shade_color = '#000000',
+	draw_outline = false,
+	default_outline_color = '#222222',
+
+	default_color = '#562d66',
+	color0 = '#a5439e',
+    color1 = '#4f6998',
+
+
+-- BORDERS
+	draw_borders = true,
+-- Stippled borders?
+	stippled_borders = 0,
+-- border margins
+	border_inner_margin = 14,
+	border_outer_margin = 2,
+-- border width
+	border_width = 4,
+
+-- MISC
+-- Boolean value, if true, Conky will be forked to background when started.
+	background = true,
+
+-- Adds spaces around certain objects to stop them from moving other things
+-- around, this only helps if you are using a mono font
+-- Options: right, left or none
+	use_spacer = 'none',
+
+-- Subtract (file system) buffers from used memory?
+	no_buffers = true,
+
+-- Imlib2 image cache size, in bytes. Default 4MiB Increase this value if you use
+-- $image lots. Set to 0 to disable the image cache.
+	imlib_cache_size = 0,
+
+-- Use the Xdbe extension? (eliminates flicker)
+-- It is highly recommended to use own window with this one
+-- so double buffer won't be so big.
+	double_buffer = true,
+	update_interval = 1,
+};
+
+conky.text = [[
+${color1}PCmanFM - file manager ${alignr}${color0}super+f
+${color1}VIEW ${color0}${hr 1}${voffset -2}
+${color0}Icon View  ${alignr}${color1}ctrl+1
+${color0}Compact View  ${alignr}${color1}ctrl+2
+${color0}Thumbnail View  ${alignr}${color1}ctrl+3
+${color0}Detailed List View  ${alignr}${color1}ctrl+4
+${color0}Show Hidden ${alignr}${color1}ctrl+H
+${color1}GO  ${color0}${hr 1}
+${voffset -2}${color0}Home Dir${alignr}${color1}alt+Home
+${color0}Parent Dir  ${alignr}${color1}alt+Up
+${color0}Previous Dir  ${alignr}${color1}alt+Left
+${color0}Next Dir  ${alignr}${color1}alt+Right
+${color0}Go to Location  ${alignr}${color1}ctrl+L
+${color0}SSH/FTP connect...  ${alignr}${color1}alt+G  C
+${color1}WINDOW  ${color0}${hr 1}
+${voffset -2}${color0}Refresh ${alignr}${color1}F5
+${color0}Dual Pane Mode ${alignr}${color1}F3
+${color0}Status Bar${alignr}${color1}ctrl+B
+${color0}Side Pane ${alignr}${color1}F9
+${color0}---> Places${alignr}${color1}ctrl+6
+${color0}---> Directory Tree ${alignr}${color1}ctrl+7
+${color1}SIZE ${color0}${hr 1}${voffset -2}
+${color0}Zoom In${alignr}${alignr}${color1}ctrl++
+${color0}Zoon Out ${alignr}${color1}ctrl+-
+${color0}Normal Size ${alignr}${color1}ctrl+0
+]];

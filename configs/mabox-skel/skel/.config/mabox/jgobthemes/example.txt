@@ -1,0 +1,15 @@
+item_radius
+item_border
+sep_height
+sep_halign
+color_menu_bg
+color_menu_border
+color_norm_bg
+color_norm_fg
+color_sel_bg
+color_sel_fg
+color_sel_border
+color_sep_fg
+color_title_bg
+color_title_fg
+color_title_border

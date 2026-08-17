@@ -1,0 +1,15 @@
+[Desktop Entry]
+Encoding=UTF-8
+Name=Mabox Menu
+Comment=Tint2 Mabox Menu Hack
+X-GNOME-FullName=Mabox Menu
+#Exec=xdotool key super+space
+Exec=mb-jgtools main
+Terminal=false
+X-MultipleArgs=false
+Type=Application
+Icon=distributor-logo-mabox
+Categories=Utility;
+MimeType=
+StartupNotify=true
+NoDisplay=true

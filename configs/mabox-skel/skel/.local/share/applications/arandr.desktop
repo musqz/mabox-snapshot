@@ -1,0 +1,14 @@
+[Desktop Entry]
+Name=ARandR
+GenericName=Screen Settings
+GenericName[de]=Bildschirmeinstellungen
+GenericName[pl]=Ustawienia Monitora
+GenericName[es]=Ajustes de monitor
+Name[pl]=ARandR
+Name[es]=ARandR
+Icon=display
+Exec=arandr
+Terminal=false
+Type=Application
+Categories=Settings;HardwareSettings;
+StartupNotify=true
