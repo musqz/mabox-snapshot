@@ -36,6 +36,20 @@ CALAMARES_CONFIG_DIR = SHARE_DIR / "calamares"
 PACMAN_CONF = Path("/etc/pacman.conf")
 PACMAN_MIRRORLIST = Path("/etc/pacman.d/mirrorlist")
 FSTAB_FILE = Path("/etc/fstab")
+MOUNTS_FILE = Path("/proc/mounts")
+
+# The only other mounted filesystems the rootfs layer's scan of '/' is
+# allowed to cross into -- standard FHS top-level directories Calamares's
+# manual partitioning lets a user put on their own partition, not
+# incidental/removable storage. Everything else mounted under '/' (backup
+# drives, USB sticks, custom data volumes, etc.) is excluded wholesale by
+# excludes.detect_foreign_mount_excludes() so a snapshot never silently
+# balloons to include unrelated mounted volumes. A tuple, not a list --
+# it's used as a function default argument and must not be mutable.
+ALLOWED_ROOTFS_MOUNTS = (
+    Path("/boot"), Path("/home"), Path("/var"), Path("/usr"),
+    Path("/opt"), Path("/srv"), Path("/root"),
+)
 
 # Reset-mode-only: excluded from the rootfs layer outright, then replaced
 # with sanitized versions from the overlay layer (see sanitize.py) --

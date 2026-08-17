@@ -5,6 +5,15 @@ import pytest
 from mabox_snapshot import overlay, squashfs
 
 
+@pytest.fixture(autouse=True)
+def _no_real_mounts(monkeypatch, tmp_path):
+    """resolve_plan() reads the live host's mount table by default (via
+    excludes.detect_foreign_mount_excludes()) -- point it at a path that
+    doesn't exist so these tests stay hermetic regardless of what's
+    mounted on the machine running them."""
+    monkeypatch.setattr(overlay.constants, "MOUNTS_FILE", tmp_path / "mounts-not-present")
+
+
 def test_resolve_plan_preserving_has_single_rootfs_layer(tmp_path):
     exclude_list = tmp_path / "excludes.list"
     exclude_list.write_text("var/log/*\n")
@@ -15,6 +24,33 @@ def test_resolve_plan_preserving_has_single_rootfs_layer(tmp_path):
     assert [layer.name for layer in plan.layers] == ["rootfs"]
     assert plan.layers[0].source == Path("/")
     assert "var/log/*" in plan.layers[0].exclude_patterns
+
+
+def test_resolve_plan_rootfs_layer_includes_foreign_mount_excludes(tmp_path, monkeypatch):
+    exclude_list = tmp_path / "excludes.list"
+    exclude_list.write_text("")
+    mounts = tmp_path / "mounts"
+    mounts.write_text(f"/dev/sdb1 /mount/data_opslag ext4 rw 0 0\n")
+
+    plan = overlay.resolve_plan("preserving", tmp_path / "work", exclude_list, mounts_file=mounts)
+
+    assert "mount/data_opslag/*" in plan.layers[0].exclude_patterns
+
+
+def test_resolve_plan_deduplicates_across_exclude_sources(tmp_path):
+    # Same pattern from two independent sources: the user's own exclude
+    # list, and detect_foreign_mount_excludes() deriving it from a real
+    # mount at the same path.
+    exclude_list = tmp_path / "excludes.list"
+    exclude_list.write_text("mount/data_opslag/*\n")
+    mounts = tmp_path / "mounts"
+    mounts.write_text(f"/dev/sdb1 /mount/data_opslag ext4 rw 0 0\n")
+    workdir = tmp_path / "work"
+
+    plan = overlay.resolve_plan("preserving", workdir, exclude_list, mounts_file=mounts)
+
+    patterns = plan.layers[0].exclude_patterns
+    assert patterns.count("mount/data_opslag/*") == 1
 
 
 def test_resolve_plan_reset_has_two_independent_layers(tmp_path):
