@@ -423,21 +423,70 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("version", help="Print the version").set_defaults(func=cmd_version)
     sub.add_parser("doctor", help="Check prerequisites, read-only").set_defaults(func=cmd_doctor)
 
-    create_parser = sub.add_parser("create", help="Build a snapshot")
-    create_parser.add_argument("--mode", choices=["preserving", "reset"], required=True)
-    create_parser.add_argument("-w", "--workdir", type=Path)
-    create_parser.add_argument("-o", "--skip-space-check", action="store_true")
+    create_parser = sub.add_parser(
+        "create",
+        help="Build a snapshot",
+        description="Build a bootable live/install ISO from the running system.",
+        epilog=(
+            "example:\n"
+            "  mabox-snapshot create --mode reset --output-dir /mnt/usb --all-kernels\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    create_parser.add_argument(
+        "--mode", choices=["preserving", "reset"], required=True,
+        help=(
+            "preserving: full personal clone (real /home, real accounts, real passwords; "
+            "optionally --encrypt). reset: sanitized ISO for sharing (synthetic demo/demo "
+            "account, no real /home, no saved credentials)"
+        ),
+    )
+    create_parser.add_argument(
+        "-w", "--workdir", type=Path,
+        help=f"Scratch directory for build state -- squashfs layers, ISO tree, mkinitcpio config (default: {constants.DEFAULT_WORKDIR})",
+    )
+    create_parser.add_argument(
+        "-o", "--skip-space-check", action="store_true",
+        help="Skip the free-space precheck on workdir/output-dir before building",
+    )
     create_parser.add_argument("-m", "--month", action="store_true", help="Name the output by year-month instead of a full timestamp")
-    create_parser.add_argument("--output-dir", type=Path)
-    create_parser.add_argument("--iso-name")
-    create_parser.add_argument("--compression", choices=squashfs.SUPPORTED_COMPRESSORS)
-    create_parser.add_argument("--compression-level", type=int)
-    create_parser.add_argument("--exclude-list", type=Path)
-    create_parser.add_argument("--exclude-folder", action="append", default=[], choices=constants.NAMED_FOLDERS)
-    create_parser.add_argument("--kernel")
-    create_parser.add_argument("--all-kernels", action="store_true")
+    create_parser.add_argument(
+        "--output-dir", type=Path,
+        help="Directory the finished ISO is written to (default: same as --workdir)",
+    )
+    create_parser.add_argument(
+        "--iso-name",
+        help="Base filename for the ISO, without .iso (default: mabox-<mode>-<timestamp>)",
+    )
+    create_parser.add_argument(
+        "--compression", choices=squashfs.SUPPORTED_COMPRESSORS,
+        help="Squashfs compression algorithm passed to mksquashfs -comp (default: zstd)",
+    )
+    create_parser.add_argument(
+        "--compression-level", type=int,
+        help="Compression level passed to mksquashfs -Xcompression-level (valid range depends on --compression; default: mksquashfs's own default)",
+    )
+    create_parser.add_argument(
+        "--exclude-list", type=Path,
+        help=f"Path to a custom exclude-pattern file, replacing the default list (default: {constants.EXCLUDES_LIST_FILE})",
+    )
+    create_parser.add_argument(
+        "--exclude-folder", action="append", default=[], choices=constants.NAMED_FOLDERS,
+        help="Exclude a named XDG user folder from the snapshot in addition to --exclude-list; repeatable",
+    )
+    create_parser.add_argument(
+        "--kernel",
+        help="Only include this installed kernel, matched against mkinitcpio presets (default: newest installed kernel)",
+    )
+    create_parser.add_argument(
+        "--all-kernels", action="store_true",
+        help="Include every installed kernel instead of just the newest",
+    )
     create_parser.add_argument("--dry-run", action="store_true", help="Print the resolved plan and command, execute nothing")
-    create_parser.add_argument("--keep-workdir", action="store_true")
+    create_parser.add_argument(
+        "--keep-workdir", action="store_true",
+        help="No-op for now: workdir cleanup isn't implemented yet, so build state under --workdir is always kept",
+    )
     create_parser.add_argument("--max-age-days", type=int, help="Delete older mabox-*.iso files in the output dir after a successful build")
     create_parser.add_argument("--change-threshold-mb", type=int, help="Prompt about home-dir items new/grown by at least this many MiB since the last snapshot (default 200)")
     create_parser.add_argument("--encrypt", action="store_true", help="Encrypt rootfs.sfs with LUKS2 (preserving mode only; passphrase prompted interactively at build time)")
@@ -449,8 +498,8 @@ def build_parser() -> argparse.ArgumentParser:
     config_sub.add_parser("show", help="Print the resolved config").set_defaults(func=cmd_config_show)
     config_sub.add_parser("path", help="List config files in load order").set_defaults(func=cmd_config_path)
     set_parser = config_sub.add_parser("set", help="Set a key in the user config")
-    set_parser.add_argument("key")
-    set_parser.add_argument("value")
+    set_parser.add_argument("key", help="Config key to set (see: mabox-snapshot config show)")
+    set_parser.add_argument("value", help="Value to store for that key, written into the TOML config as a quoted string")
     set_parser.set_defaults(func=cmd_config_set)
 
     excludes_parser = sub.add_parser("excludes", help="Manage the exclude list")
@@ -460,10 +509,10 @@ def build_parser() -> argparse.ArgumentParser:
     excludes_sub.add_parser("reset", help="Restore the shipped default exclude list").set_defaults(func=cmd_excludes_reset)
     excludes_sub.add_parser("folders", help="List named folders and their resolved paths").set_defaults(func=cmd_excludes_folders)
     add_parser = excludes_sub.add_parser("add", help="Add a pattern")
-    add_parser.add_argument("pattern")
+    add_parser.add_argument("pattern", help="mksquashfs -ef exclude pattern, relative to /, e.g. var/cache/*")
     add_parser.set_defaults(func=cmd_excludes_add)
     remove_parser = excludes_sub.add_parser("remove", help="Remove a pattern")
-    remove_parser.add_argument("pattern")
+    remove_parser.add_argument("pattern", help="Exact pattern to remove, as printed by 'excludes list'")
     remove_parser.set_defaults(func=cmd_excludes_remove)
 
     packages_parser = sub.add_parser("packages", help="Inspect installed packages")
@@ -473,9 +522,18 @@ def build_parser() -> argparse.ArgumentParser:
         "--explicit", dest="which", action="store_const", const="explicit", default="explicit",
         help="Explicit repo packages (default)",
     )
-    list_parser.add_argument("--aur", dest="which", action="store_const", const="aur")
-    list_parser.add_argument("--local", dest="which", action="store_const", const="local")
-    list_parser.add_argument("--all", dest="which", action="store_const", const="all")
+    list_parser.add_argument(
+        "--aur", dest="which", action="store_const", const="aur",
+        help="Foreign (non-repo) packages that are reproducible from the AUR",
+    )
+    list_parser.add_argument(
+        "--local", dest="which", action="store_const", const="local",
+        help="Foreign (non-repo) packages not found in the AUR -- hand-built or removed upstream",
+    )
+    list_parser.add_argument(
+        "--all", dest="which", action="store_const", const="all",
+        help="--explicit, --aur, and --local combined",
+    )
     list_parser.set_defaults(func=cmd_packages_list)
 
     return parser
