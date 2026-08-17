@@ -1,4 +1,21 @@
+from pathlib import Path
+
 from mabox_snapshot import excludes
+
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+
+
+def test_shipped_default_parses_and_includes_curated_home_bloat_entries():
+    default_path = REPO_ROOT / "configs" / "excludes.list.default"
+    patterns = excludes._parse_lines(default_path.read_text())
+
+    assert len(patterns) > 0
+    assert "home/*/.cache/mozilla/firefox/*/cache2/*" in patterns
+    assert "home/*/.var/app/*/cache/*" in patterns
+    # Curated, not a blanket wipe -- .cache and .var themselves must never
+    # appear bare, only specific known-large subpaths within them.
+    assert "home/*/.cache/*" not in patterns
+    assert "home/*/.var/*" not in patterns
 
 
 def test_parse_lines_skips_comments_and_blanks():
