@@ -27,6 +27,7 @@ class SnapshotConfig:
     max_age_days: int | None = None
     change_threshold_mb: int = 200
     encrypt: bool = False
+    backup_destinations: tuple[str, ...] = ()
 
 
 def _load_toml(path: Path) -> dict:
@@ -47,6 +48,8 @@ def _coerce(raw: dict) -> dict:
         out["exclude_list"] = Path(out["exclude_list"])
     if "exclude_folders" in out:
         out["exclude_folders"] = tuple(out["exclude_folders"])
+    if "backup_destinations" in out:
+        out["backup_destinations"] = tuple(out["backup_destinations"])
     return out
 
 

@@ -10,7 +10,7 @@ from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
-from . import calamares, changes, config, constants, excludes, grubcfg, history, isobuild, kernels, luks, overlay, packages, permissions, privilege, retention, squashfs
+from . import backup, calamares, changes, config, constants, excludes, grubcfg, history, isobuild, kernels, luks, overlay, packages, permissions, privilege, retention, squashfs
 from . import workdir as workdir_mod
 from . import __version__
 
@@ -86,6 +86,8 @@ def _apply_create_overrides(cfg: config.SnapshotConfig, args: argparse.Namespace
         overrides["change_threshold_mb"] = args.change_threshold_mb
     if args.encrypt:
         overrides["encrypt"] = True
+    if args.backup_to:
+        overrides["backup_destinations"] = tuple(args.backup_to)
     return replace(cfg, **overrides)
 
 
@@ -180,6 +182,7 @@ def cmd_create(args: argparse.Namespace) -> int:
     print(f"bios boot:   {' '.join(str(c) for c in bios_cmd)}")
     print(f"efi boot:    {' '.join(str(c) for c in efi_cmd)}")
     print(f"assemble:    {' '.join(str(c) for c in xorriso_cmd)}")
+    print(f"backup:      {', '.join(cfg.backup_destinations) if cfg.backup_destinations else 'none configured'}")
 
     if args.dry_run:
         return 0
@@ -197,7 +200,11 @@ def cmd_create(args: argparse.Namespace) -> int:
         except FileNotFoundError as e:
             print(f"error: {e}", file=sys.stderr)
             return 1
-        passphrase = luks.prompt_for_passphrase()
+        try:
+            passphrase = luks.prompt_for_passphrase()
+        except RuntimeError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 1
 
     workdir_mod.ensure_workdir(cfg.workdir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -298,6 +305,10 @@ def cmd_create(args: argparse.Namespace) -> int:
     if cfg.max_age_days is not None:
         for removed in retention.prune_old_isos(output_dir, cfg.max_age_days):
             print(f"removed old snapshot: {removed}")
+
+    if cfg.backup_destinations:
+        for failed in backup.push_to_destinations(dest, cfg.backup_destinations):
+            print(f"warning: backup to {failed} failed", file=sys.stderr)
 
     print("note: boot this in a VM before trusting it -- BIOS+UEFI hybrid boot is not self-verifying.")
     return 0
@@ -406,6 +417,7 @@ def build_parser() -> argparse.ArgumentParser:
     create_parser.add_argument("--max-age-days", type=int, help="Delete older mabox-*.iso files in the output dir after a successful build")
     create_parser.add_argument("--change-threshold-mb", type=int, help="Prompt about home-dir items new/grown by at least this many MiB since the last snapshot (default 200)")
     create_parser.add_argument("--encrypt", action="store_true", help="Encrypt rootfs.sfs with LUKS2 (preserving mode only; passphrase prompted interactively at build time)")
+    create_parser.add_argument("--backup-to", action="append", default=[], help="rsync the finished ISO here (local path or user@host:path); repeatable")
     create_parser.set_defaults(func=cmd_create)
 
     config_parser = sub.add_parser("config", help="Inspect or edit configuration")
