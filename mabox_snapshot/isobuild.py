@@ -111,6 +111,20 @@ def prepare_efi_boot(iso_root: Path, work_dir: Path, efi_img_size: int = 4 * 102
     boot_efi.mkdir(parents=True, exist_ok=True)
     subprocess.run(build_efi_boot_command(efi_src, boot_efi / "bootx64.efi"), check=True)
 
+    # bootx64.efi only embeds enough to bootstrap into normal mode -- the
+    # rest of grub's modules (normal.mod, filesystem drivers, etc.) are
+    # loaded at runtime from $prefix/x86_64-efi/*.mod, where $prefix is
+    # /boot/grub (baked in by build_efi_boot_command's -p flag). Unlike
+    # prepare_bios_boot(), which copies i386-pc's modules straight onto
+    # the ISO tree, this only had them in the workdir staging copy
+    # grub-mkimage read from -- so they need to actually exist on the ISO
+    # too, or GRUB drops to rescue mode looking for normal.mod.
+    grub_efi_dest = iso_root / "boot" / "grub" / "x86_64-efi"
+    grub_efi_dest.mkdir(parents=True, exist_ok=True)
+    for item in efi_src.iterdir():
+        if item.is_file():
+            shutil.copy2(item, grub_efi_dest / item.name)
+
     _build_fat_image(iso_root / "efi.img", boot_efi / "bootx64.efi", "efi/boot/bootx64.efi", efi_img_size)
 
 
