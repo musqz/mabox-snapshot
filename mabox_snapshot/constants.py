@@ -13,6 +13,10 @@ EXCLUDES_LIST_DEFAULT = Path("/usr/share/mabox-snapshot/excludes.list.default")
 
 NAMED_FOLDERS = ["Desktop", "Documents", "Downloads", "Music", "Pictures", "Videos", "Public", "Templates"]
 
+# Shared by cli.py's default --iso-name and retention.py's prune glob, so the
+# two can't drift apart.
+ISO_NAME_PREFIX = "mabox-"
+
 DEFAULT_WORKDIR = Path("/var/lib/mabox-snapshot/work")
 
 # Per-run snapshot manifests (see history.py) -- one small hand-written TOML

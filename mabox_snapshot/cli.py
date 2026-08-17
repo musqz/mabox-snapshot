@@ -10,7 +10,7 @@ from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
-from . import calamares, config, constants, excludes, grubcfg, history, isobuild, kernels, overlay, packages, permissions, privilege, squashfs
+from . import calamares, config, constants, excludes, grubcfg, history, isobuild, kernels, overlay, packages, permissions, privilege, retention, squashfs
 from . import workdir as workdir_mod
 from . import __version__
 
@@ -80,6 +80,8 @@ def _apply_create_overrides(cfg: config.SnapshotConfig, args: argparse.Namespace
         overrides["keep_workdir"] = True
     if args.month:
         overrides["month"] = True
+    if args.max_age_days is not None:
+        overrides["max_age_days"] = args.max_age_days
     return replace(cfg, **overrides)
 
 
@@ -114,7 +116,7 @@ def cmd_create(args: argparse.Namespace) -> int:
 
     output_dir = cfg.output_dir or cfg.workdir
     stamp = datetime.now().strftime("%Y-%m" if cfg.month else "%Y-%m-%d-%H%M")
-    iso_name = args.iso_name or f"mabox-{args.mode}-{stamp}"
+    iso_name = args.iso_name or f"{constants.ISO_NAME_PREFIX}{args.mode}-{stamp}"
     dest = output_dir / f"{iso_name}.iso"
 
     iso_root = cfg.workdir / "iso"
@@ -178,10 +180,16 @@ def cmd_create(args: argparse.Namespace) -> int:
 
     # No staging copy exists to size precisely (mksquashfs reads live '/' directly).
     # The final ISO embeds the same bytes again (ISO9660 is a monolithic image, not
-    # a reference format), so budget for the squashfs plus a same-sized ISO.
-    required_bytes = int(shutil.disk_usage("/").used * 0.5) * 2
+    # a reference format), so budget one squashfs_estimate share for the squashfs
+    # itself (always staged under workdir) and another for the ISO (written to
+    # output_dir, which defaults to workdir but may be a separate --output-dir
+    # mount -- e.g. an external drive -- in which case it needs its own check).
+    squashfs_estimate = int(shutil.disk_usage("/").used * 0.5)
+    workdir_required = squashfs_estimate if output_dir != cfg.workdir else squashfs_estimate * 2
     try:
-        workdir_mod.check_free_space(cfg.workdir, required_bytes, skip=cfg.skip_space_check)
+        workdir_mod.check_free_space(cfg.workdir, workdir_required, skip=cfg.skip_space_check)
+        if output_dir != cfg.workdir:
+            workdir_mod.check_free_space(output_dir, squashfs_estimate, skip=cfg.skip_space_check)
     except workdir_mod.InsufficientSpaceError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
@@ -231,6 +239,10 @@ def cmd_create(args: argparse.Namespace) -> int:
         history.write_manifest(dest, args.mode)
     except Exception as e:
         print(f"warning: snapshot history not recorded: {e}", file=sys.stderr)
+
+    if cfg.max_age_days is not None:
+        for removed in retention.prune_old_isos(output_dir, cfg.max_age_days):
+            print(f"removed old snapshot: {removed}")
 
     print("note: boot this in a VM before trusting it -- BIOS+UEFI hybrid boot is not self-verifying.")
     return 0
@@ -336,6 +348,7 @@ def build_parser() -> argparse.ArgumentParser:
     create_parser.add_argument("--all-kernels", action="store_true")
     create_parser.add_argument("--dry-run", action="store_true", help="Print the resolved plan and command, execute nothing")
     create_parser.add_argument("--keep-workdir", action="store_true")
+    create_parser.add_argument("--max-age-days", type=int, help="Delete older mabox-*.iso files in the output dir after a successful build")
     create_parser.set_defaults(func=cmd_create)
 
     config_parser = sub.add_parser("config", help="Inspect or edit configuration")

@@ -24,6 +24,7 @@ class SnapshotConfig:
     skip_space_check: bool = False
     keep_workdir: bool = False
     month: bool = False
+    max_age_days: int | None = None
 
 
 def _load_toml(path: Path) -> dict:
