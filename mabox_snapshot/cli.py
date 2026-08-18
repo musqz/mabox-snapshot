@@ -220,8 +220,8 @@ def cmd_create(args: argparse.Namespace) -> int:
     splash_dest = iso_root / "boot" / "grub" / "splash.png"
     # Computed once, up front (not inside normalize_splash()) so both the
     # dry-run preview below and the real build further down use the exact
-    # same border color without running magick's palette extraction twice.
-    splash_border_color = grubcfg.darkest_color(grubcfg.extract_palette(splash_source)) if has_splash else None
+    # same overlay color without running magick's palette extraction twice.
+    splash_overlay_color = grubcfg.darkest_color(grubcfg.extract_palette(splash_source)) if has_splash else None
 
     branding = calamares.load_branding() if args.mode == "reset" else None
 
@@ -260,7 +260,7 @@ def cmd_create(args: argparse.Namespace) -> int:
         print(f"initramfs:   {' '.join(str(c) for c in cmd)}")
     if has_splash:
         splash_cmd = grubcfg.build_splash_command(
-            splash_source, splash_dest, splash_border_color, fraction=cfg.splash_border_fraction
+            splash_source, splash_dest, splash_overlay_color, fraction=cfg.splash_overlay_fraction
         )
         print(f"splash:      {' '.join(str(c) for c in splash_cmd)}")
     else:
@@ -401,7 +401,7 @@ def cmd_create(args: argparse.Namespace) -> int:
 
     if has_splash:
         grubcfg.normalize_splash(
-            splash_source, splash_dest, splash_border_color, fraction=cfg.splash_border_fraction
+            splash_source, splash_dest, splash_overlay_color, fraction=cfg.splash_overlay_fraction
         )
 
     grub_cfg_dest = iso_root / "boot" / "grub" / "grub.cfg"

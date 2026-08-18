@@ -19,19 +19,25 @@ from . import constants
 # GRUB draws a background at whatever native size the image is -- a source
 # photo with the wrong aspect ratio just looks stretched/cropped oddly.
 # Normalizing every splash to one fixed canvas means it looks right
-# regardless of what the user dropped in the images folder. The photo is
-# shrunk to fit an inner box and padded out to the full canvas with a
-# solid border (see build_splash_command()) rather than cropped-to-fill,
-# so GRUB's boot menu text -- drawn over the top -- stays readable against
-# a flat, dark edge instead of whatever busy detail happened to land at
-# the photo's own edges. `magick`, never `convert` (deprecated since
-# IMv7).
+# regardless of what the user dropped in the images folder. `magick`,
+# never `convert` (deprecated since IMv7).
 SPLASH_SIZE = "1920x1080"
 
-# Border thickness as a fraction of the canvas's shorter side, so it
-# scales sensibly regardless of SPLASH_SIZE's aspect ratio. Overridable
-# per-machine via SnapshotConfig.splash_border_fraction.
-DEFAULT_BORDER_FRACTION = 0.06
+# A hard geometric border (an earlier version of this: shrink the photo,
+# pad out with a solid color) can't reliably guarantee GRUB's own UI text
+# -- the menu list at the top, "press e to edit"-style help text at the
+# bottom -- actually lands on it: the menu's height depends on how many
+# kernels this build includes, and GRUB's real graphics resolution (and
+# therefore its font/row size relative to our fixed-size canvas) varies
+# by hardware. Confirmed against a real VM boot: with a 6%-of-shorter-
+# side border, both the menu list and the help text sat on the busy photo
+# instead. A dark top/bottom fade instead of a hard edge guarantees good
+# contrast wherever that text actually renders, without needing to know
+# GRUB's exact row geometry -- and the photo stays fully visible,
+# edge-to-edge, everywhere the fade doesn't reach. Height of that fade, at
+# both the top and bottom, as a fraction of SPLASH_SIZE's height.
+# Overridable per-machine via SnapshotConfig.splash_overlay_fraction.
+DEFAULT_OVERLAY_FRACTION = 0.18
 
 # Matches magick's `-unique-colors txt:-` hex column (#RRGGBB, optionally
 # with a trailing alpha byte on images that have one) -- captures just the
@@ -68,34 +74,53 @@ def darkest_color(palette: list[tuple[int, int, int]]) -> str:
     return f"#{r:02X}{g:02X}{b:02X}"
 
 
-def border_px(size: str = SPLASH_SIZE, fraction: float = DEFAULT_BORDER_FRACTION) -> int:
-    width, height = (int(v) for v in size.split("x"))
-    return round(min(width, height) * fraction)
+def overlay_height_px(size: str = SPLASH_SIZE, fraction: float = DEFAULT_OVERLAY_FRACTION) -> int:
+    _, height = (int(v) for v in size.split("x"))
+    return round(height * fraction)
 
 
 def build_splash_command(
     source: Path,
     dest: Path,
-    border_color: str,
+    overlay_color: str,
     size: str = SPLASH_SIZE,
-    fraction: float = DEFAULT_BORDER_FRACTION,
+    fraction: float = DEFAULT_OVERLAY_FRACTION,
 ) -> list[str]:
+    """Crops the photo to fill the full canvas edge-to-edge (no shrinking,
+    no padding), then composites a top-to-transparent gradient at the top
+    and a transparent-to-bottom gradient at the bottom -- solid-ish right
+    at the edges, fading into the untouched photo toward the middle. Both
+    gradients are drawn via magick's `gradient:` pseudo-format ('none' is
+    its documented fully-transparent stop), composited with -gravity
+    north/south so they land exactly at the canvas edges regardless of
+    overlay_height_px()'s size."""
     width, height = (int(v) for v in size.split("x"))
-    px = border_px(size, fraction)
-    inner = f"{width - 2 * px}x{height - 2 * px}"
+    band = f"{width}x{overlay_height_px(size, fraction)}"
     return [
         "magick",
         str(source),
         "-resize",
-        f"{inner}^",
+        f"{size}^",
         "-gravity",
         "center",
         "-extent",
-        inner,
-        "-bordercolor",
-        border_color,
-        "-border",
-        str(px),
+        size,
+        "(",
+        "-size",
+        band,
+        f"gradient:{overlay_color}-none",
+        ")",
+        "-gravity",
+        "north",
+        "-composite",
+        "(",
+        "-size",
+        band,
+        f"gradient:none-{overlay_color}",
+        ")",
+        "-gravity",
+        "south",
+        "-composite",
         str(dest),
     ]
 
@@ -103,12 +128,12 @@ def build_splash_command(
 def normalize_splash(
     source: Path,
     dest: Path,
-    border_color: str,
+    overlay_color: str,
     size: str = SPLASH_SIZE,
-    fraction: float = DEFAULT_BORDER_FRACTION,
+    fraction: float = DEFAULT_OVERLAY_FRACTION,
 ) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run(build_splash_command(source, dest, border_color, size, fraction), check=True)
+    subprocess.run(build_splash_command(source, dest, overlay_color, size, fraction), check=True)
 
 
 def _menu_entry(kernel_name: str, misolabel: str) -> str:

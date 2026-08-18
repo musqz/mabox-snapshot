@@ -50,10 +50,10 @@ def test_load_coerces_path_and_tuple_fields(tmp_path):
 
 def test_load_float_field_needs_no_coercion(tmp_path):
     system = tmp_path / "system.conf"
-    system.write_text("splash_border_fraction = 0.1\n")
+    system.write_text("splash_overlay_fraction = 0.1\n")
 
     cfg = config.load(system_path=system, user_path=tmp_path / "user.conf")
-    assert cfg.splash_border_fraction == 0.1
+    assert cfg.splash_overlay_fraction == 0.1
 
 
 def test_set_value_inserts_new_key(tmp_path):
