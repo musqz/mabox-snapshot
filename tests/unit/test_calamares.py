@@ -143,7 +143,7 @@ def test_insert_live_source_job_raises_when_unpackfs_missing():
 
 
 def test_unpackfs_pseudo_specs_declares_parent_dirs_before_the_file():
-    specs = calamares.unpackfs_pseudo_specs("/work/unpackfs.conf")
+    specs = calamares.unpackfs_pseudo_specs("/work/unpackfs.conf", "/work/initcpio-override.conf")
     assert specs[0] == "etc/calamares d 755 0 0"
     assert specs[1] == "etc/calamares/modules d 755 0 0"
     assert specs[2].startswith(f"{calamares.UNPACKFS_CONF_PATH} f 644 0 0 cat ")
@@ -151,24 +151,31 @@ def test_unpackfs_pseudo_specs_declares_parent_dirs_before_the_file():
 
 
 def test_unpackfs_pseudo_specs_quotes_a_path_with_spaces():
-    specs = calamares.unpackfs_pseudo_specs("/work dir/unpackfs.conf")
+    specs = calamares.unpackfs_pseudo_specs("/work dir/unpackfs.conf", "/work/initcpio-override.conf")
     assert "'/work dir/unpackfs.conf'" in specs[2]
 
 
-def test_unpackfs_pseudo_specs_encrypt_false_is_unaffected():
-    specs = calamares.unpackfs_pseudo_specs("/work/unpackfs.conf")
-    assert len(specs) == 3
+def test_unpackfs_pseudo_specs_always_injects_initcpio_override():
+    specs = calamares.unpackfs_pseudo_specs("/work/unpackfs.conf", "/work/initcpio-override.conf")
+    assert len(specs) == 4
+    initcpio_spec = next(s for s in specs if s.startswith(calamares.INITCPIO_CONF_TARGET_PATH))
+    assert initcpio_spec.endswith("/work/initcpio-override.conf")
 
 
 def test_unpackfs_pseudo_specs_encrypt_true_injects_settings_and_shellprocess():
     specs = calamares.unpackfs_pseudo_specs(
         "/work/unpackfs.conf",
+        "/work/initcpio-override.conf",
         encrypt=True,
         settings_conf_path="/work/settings-encrypt.conf",
         shellprocess_conf_path="/work/shellprocess-remount.conf",
     )
-    assert len(specs) == 5
+    assert len(specs) == 6
     settings_spec = next(s for s in specs if s.startswith(calamares.SETTINGS_CONF_TARGET_PATH))
     assert settings_spec.endswith("/work/settings-encrypt.conf")
     shellprocess_spec = next(s for s in specs if s.startswith(calamares.SHELLPROCESS_CONF_TARGET_PATH))
     assert shellprocess_spec.endswith("/work/shellprocess-remount.conf")
+
+
+def test_initcpio_conf_override_regenerates_every_preset():
+    assert "kernel: all" in calamares.INITCPIO_CONF_OVERRIDE
