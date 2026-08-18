@@ -169,10 +169,16 @@ def cmd_create(args: argparse.Namespace) -> int:
     # convention unpackfs_conf_path.write_text() already follows further
     # down.
     unpackfs_conf_path = cfg.workdir / "unpackfs.conf"
+    # Calamares' stock initcpio.conf assumes the generic "linux" kernel
+    # package name, which Mabox never uses (see calamares.py's
+    # INITCPIO_CONF_OVERRIDE) -- injected for every build, both modes,
+    # same treatment as unpackfs_conf_path itself.
+    initcpio_override_path = cfg.workdir / "initcpio-override.conf"
     settings_conf_path = cfg.workdir / "settings-encrypt.conf" if cfg.encrypt else None
     shellprocess_conf_path = cfg.workdir / "shellprocess-remount.conf" if cfg.encrypt else None
     unpackfs_pseudo = calamares.unpackfs_pseudo_specs(
         unpackfs_conf_path,
+        initcpio_override_path,
         encrypt=cfg.encrypt,
         settings_conf_path=settings_conf_path,
         shellprocess_conf_path=shellprocess_conf_path,
@@ -183,6 +189,7 @@ def cmd_create(args: argparse.Namespace) -> int:
     # would silently win over our pseudo-file -- verified empirically,
     # mksquashfs just warns and keeps whatever's already in the source tree.
     plan.layers[0].exclude_patterns.append(calamares.UNPACKFS_CONF_PATH)
+    plan.layers[0].exclude_patterns.append(calamares.INITCPIO_CONF_TARGET_PATH)
     if cfg.encrypt:
         plan.layers[0].exclude_patterns.append(calamares.SETTINGS_CONF_TARGET_PATH)
         plan.layers[0].exclude_patterns.append(calamares.SHELLPROCESS_CONF_TARGET_PATH)
@@ -366,6 +373,7 @@ def cmd_create(args: argparse.Namespace) -> int:
     unpackfs_conf_path.write_text(
         calamares.build_unpackfs_conf([layer.name for layer in plan.layers], encrypt=cfg.encrypt)
     )
+    initcpio_override_path.write_text(calamares.INITCPIO_CONF_OVERRIDE)
     if cfg.encrypt:
         settings_conf_path.write_text(
             calamares.insert_live_source_job(constants.CALAMARES_SETTINGS_FILE.read_text())
