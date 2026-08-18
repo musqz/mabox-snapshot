@@ -267,6 +267,21 @@ def cmd_create(args: argparse.Namespace) -> int:
             return 1
 
     workdir_mod.ensure_workdir(cfg.workdir)
+    # Wipe any staged ISO tree left over from a previous build before writing
+    # this one's layers -- squashfs.build()/luks.encrypt_squashfs() only ever
+    # write NEW layer files, they never delete OLD ones. A build whose flags
+    # produce different filenames than last time (--encrypt toggled, so
+    # rootfs.sfs vs rootfs.sfs.luks; or a different --kernel/--all-kernels
+    # selection, leaving another kernel's vmlinuz/initramfs behind) would
+    # otherwise leave stale multi-GB files sitting in iso_root, which
+    # isobuild.assemble() then grafts into the new ISO right alongside the
+    # real content -- a real, observed bug: a stale encrypted rootfs.sfs.luks
+    # left over from a previous --encrypt build nearly doubled a later
+    # unencrypted build's ISO size (61G stale + 37G real = 97G). Wiped
+    # unconditionally, regardless of --keep-workdir: that flag is about
+    # letting a user inspect what THIS build produced after it finishes, not
+    # about preserving a PREVIOUS build's now-irrelevant staged tree.
+    workdir_mod.cleanup(iso_root)
     output_dir.mkdir(parents=True, exist_ok=True)
     for layer in plan.layers:
         layer_dest[layer.name].parent.mkdir(parents=True, exist_ok=True)
@@ -598,7 +613,9 @@ def build_parser() -> argparse.ArgumentParser:
     create_parser.add_argument("--dry-run", action="store_true", help="Print the resolved plan and command, execute nothing")
     create_parser.add_argument(
         "--keep-workdir", action="store_true",
-        help="No-op for now: workdir cleanup isn't implemented yet, so build state under --workdir is always kept",
+        help="No-op for now: post-build workdir cleanup isn't implemented yet, so build state under --workdir "
+             "is always kept after a successful build. Unaffected by this: the staged ISO tree from a "
+             "PREVIOUS build is always wiped before a new one starts, to avoid stale layer files leaking in",
     )
     create_parser.add_argument("--max-age-days", type=int, help="Delete older mabox-*.iso files in the output dir after a successful build")
     create_parser.add_argument("--change-threshold-mb", type=int, help="Prompt about home-dir items new/grown by at least this many MiB since the last snapshot (default 200)")
