@@ -211,6 +211,10 @@ def cmd_create(args: argparse.Namespace) -> int:
     splash_source = constants.IMAGES_DIR / "splash.png"
     has_splash = splash_source.exists()
     splash_dest = iso_root / "boot" / "grub" / "splash.png"
+    # Computed once, up front (not inside normalize_splash()) so both the
+    # dry-run preview below and the real build further down use the exact
+    # same border color without running magick's palette extraction twice.
+    splash_border_color = grubcfg.darkest_color(grubcfg.extract_palette(splash_source)) if has_splash else None
 
     branding = calamares.load_branding() if args.mode == "reset" else None
 
@@ -248,7 +252,10 @@ def cmd_create(args: argparse.Namespace) -> int:
     for cmd in initramfs_cmds:
         print(f"initramfs:   {' '.join(str(c) for c in cmd)}")
     if has_splash:
-        print(f"splash:      {' '.join(str(c) for c in grubcfg.build_splash_command(splash_source, splash_dest))}")
+        splash_cmd = grubcfg.build_splash_command(
+            splash_source, splash_dest, splash_border_color, fraction=cfg.splash_border_fraction
+        )
+        print(f"splash:      {' '.join(str(c) for c in splash_cmd)}")
     else:
         print(f"splash:      none configured ({splash_source} not found) -- plain grub boot menu")
     if args.mode == "reset":
@@ -385,7 +392,9 @@ def cmd_create(args: argparse.Namespace) -> int:
         isobuild.build_initramfs(kvers[k.name], mkinitcpio_conf, iso_root / "boot" / f"initramfs-{k.name}.img")
 
     if has_splash:
-        grubcfg.normalize_splash(splash_source, splash_dest)
+        grubcfg.normalize_splash(
+            splash_source, splash_dest, splash_border_color, fraction=cfg.splash_border_fraction
+        )
 
     grub_cfg_dest = iso_root / "boot" / "grub" / "grub.cfg"
     grub_cfg_dest.parent.mkdir(parents=True, exist_ok=True)
