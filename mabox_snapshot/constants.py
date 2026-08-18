@@ -137,30 +137,29 @@ LUKS_CONTAINER_SUFFIX = ".luks"
 # source of truth to keep the shell copy in sync with, not a runtime link.
 ISO_LUKS_MAPPER_NAME = "mabox_rootfs"
 
-# mabox-snapshot-live-source.service remounts the already-unlocked
-# dm-crypt mapper (see ISO_LUKS_MAPPER_NAME) here, read-only, early in
-# every boot -- a no-op everywhere except a live boot of an --encrypt
-# build, guarded by the unit's own ConditionPathExists. This is NOT the
-# path miso_luks's _mnt_luks_sfs() itself mounts the decrypted rootfs at
-# during boot (/run/miso/sfs/rootfs) -- that mount does not survive
-# switch_root into the running system (verified empirically: it's an
-# empty, orphaned directory afterward, even from PID 1's own mount
-# namespace, even though the live session keeps working fine regardless,
-# since overlayfs doesn't need that original mount path to stay valid
-# once it's already built the live root from it). The underlying
-# dm-crypt mapping itself DOES survive (/dev is reliably carried over),
-# so this unit just remounts that already-unlocked device somewhere
-# stable -- no second passphrase prompt needed. Calamares' unpackfs
-# module reads from here via a "file" sourcefs entry instead of trying
-# to decrypt the .luks container itself. Same manual-sync-with-shell
-# precedent as ISO_LUKS_MAPPER_NAME above -- keep in sync by hand with
-# systemd/system/mabox-snapshot-live-source.service if either changes.
+# Where Calamares' unpackfs module reads an --encrypt build's decrypted
+# rootfs from, via a "file" sourcefs entry (see calamares.py's
+# build_unpackfs_conf()). This is NOT the path miso_luks's _mnt_luks_sfs()
+# itself mounts the decrypted rootfs at during boot (/run/miso/sfs/rootfs)
+# -- that mount does not survive switch_root into the running system
+# (verified empirically: it's an empty, orphaned directory afterward,
+# even from PID 1's own mount namespace, even though the live session
+# keeps working fine regardless, since overlayfs doesn't need that
+# original mount path to stay valid once it's already built the live
+# root from it). A first fix attempt remounted the still-unlocked
+# dm-crypt device here via a systemd unit running once at boot -- also
+# verified, the hard way, in a real VM, to be unreliable: the mount can
+# go empty again well after boot, for reasons never fully pinned down,
+# with no guarantee it's still there by whenever Calamares actually runs.
+# The only mount that's provably valid is one made *immediately* before
+# it's read, so this path is now provisioned by a Calamares shellprocess
+# job (calamares.py's build_shellprocess_remount_conf()/
+# insert_live_source_job()) spliced into the exec sequence right before
+# unpackfs -- remount and read happen back to back, no gap for anything
+# to disturb in between. No second passphrase prompt needed either way:
+# the dm-crypt mapping (see ISO_LUKS_MAPPER_NAME) is already unlocked by
+# the time either mechanism runs.
 MISO_LUKS_LIVE_ROOTFS_MOUNT = "/run/mabox-snapshot/live-source"
-
-# Installed by packaging/PKGBUILD alongside the package itself, enabled
-# by default -- the second signal (alongside MISO_LUKS_HOOK_INSTALLED)
-# that an --encrypt build's install can actually work on this host.
-MISO_LUKS_LIVE_SOURCE_UNIT_INSTALLED = Path("/usr/lib/systemd/system/mabox-snapshot-live-source.service")
 
 # User-editable branding source, same convention as EXCLUDES_LIST_FILE
 # (plain directory under /etc/mabox-snapshot, no separate per-user split).

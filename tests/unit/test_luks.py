@@ -63,26 +63,15 @@ def test_create_container_file_creates_sparse_file_of_exact_size(tmp_path):
     assert path.stat().st_blocks * 512 < size  # sparse, not really written
 
 
-def test_check_hook_installed_raises_when_hook_missing(tmp_path):
-    unit = tmp_path / "mabox-snapshot-live-source.service"
-    unit.write_text("# unit")
+def test_check_hook_installed_raises_when_missing(tmp_path):
     with pytest.raises(FileNotFoundError, match="package"):
-        luks.check_hook_installed(tmp_path / "does-not-exist", unit)
+        luks.check_hook_installed(tmp_path / "does-not-exist")
 
 
-def test_check_hook_installed_raises_when_live_source_unit_missing(tmp_path):
+def test_check_hook_installed_passes_when_present(tmp_path):
     hook = tmp_path / "miso_luks"
     hook.write_text("# hook")
-    with pytest.raises(FileNotFoundError, match="package"):
-        luks.check_hook_installed(hook, tmp_path / "does-not-exist")
-
-
-def test_check_hook_installed_passes_when_both_present(tmp_path):
-    hook = tmp_path / "miso_luks"
-    hook.write_text("# hook")
-    unit = tmp_path / "mabox-snapshot-live-source.service"
-    unit.write_text("# unit")
-    luks.check_hook_installed(hook, unit)  # must not raise
+    luks.check_hook_installed(hook)  # must not raise
 
 
 def test_prompt_for_passphrase_returns_when_entries_match(monkeypatch):
