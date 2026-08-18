@@ -77,3 +77,28 @@ def test_build_calamares_branding_returns_false_when_unconfigured(tmp_path):
     applied = calamares.build_calamares_branding(overlay_dir, tmp_path / "no-images")
     assert applied is False
     assert not (overlay_dir / "etc/calamares").exists()
+
+
+def test_build_unpackfs_conf_one_entry_per_layer():
+    conf = calamares.build_unpackfs_conf(["rootfs"], basedir="mabox", arch="x86_64")
+    assert conf.count("- source:") == 1
+    assert '"/run/miso/bootmnt/mabox/x86_64/rootfs.sfs"' in conf
+    assert 'sourcefs: "squashfs"' in conf
+
+
+def test_build_unpackfs_conf_reset_mode_lists_both_layers_in_order():
+    conf = calamares.build_unpackfs_conf(["rootfs", "desktopfs"])
+    assert conf.index("rootfs.sfs") < conf.index("desktopfs.sfs")
+
+
+def test_unpackfs_pseudo_specs_declares_parent_dirs_before_the_file():
+    specs = calamares.unpackfs_pseudo_specs("/work/unpackfs.conf")
+    assert specs[0] == "etc/calamares d 755 0 0"
+    assert specs[1] == "etc/calamares/modules d 755 0 0"
+    assert specs[2].startswith(f"{calamares.UNPACKFS_CONF_PATH} f 644 0 0 cat ")
+    assert specs[2].endswith("/work/unpackfs.conf")
+
+
+def test_unpackfs_pseudo_specs_quotes_a_path_with_spaces():
+    specs = calamares.unpackfs_pseudo_specs("/work dir/unpackfs.conf")
+    assert "'/work dir/unpackfs.conf'" in specs[2]

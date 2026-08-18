@@ -38,6 +38,7 @@ def build_command(
     exclude_file: Path | None,
     compression: str,
     compression_level: int | None,
+    pseudo_files: list[str] | None = None,
 ) -> list[str]:
     cmd = [
         "mksquashfs",
@@ -51,6 +52,8 @@ def build_command(
         cmd += ["-wildcards", "-ef", str(exclude_file)]
     if compression_level is not None:
         cmd += ["-Xcompression-level", str(compression_level)]
+    for spec in pseudo_files or []:
+        cmd += ["-p", spec]
     return cmd
 
 
@@ -60,6 +63,7 @@ def build(
     exclude_file: Path | None = None,
     compression: str = "zstd",
     compression_level: int | None = None,
+    pseudo_files: list[str] | None = None,
 ) -> None:
-    cmd = build_command(sources, dest, exclude_file, compression, compression_level)
+    cmd = build_command(sources, dest, exclude_file, compression, compression_level, pseudo_files)
     subprocess.run(cmd, check=True)

@@ -18,6 +18,7 @@ its stock Manjaro branding.
 from __future__ import annotations
 
 import re
+import shlex
 import shutil
 import tomllib
 from dataclasses import dataclass, field
@@ -234,3 +235,58 @@ def build_calamares_branding(overlay_dir: Path, images_dir: Path = constants.IMA
     write_branding(overlay_dir, branding, images_dir)
     write_settings_override(overlay_dir)
     return True
+
+
+# Same /etc override convention as write_settings_override's dest above --
+# Calamares layers /etc/calamares/* on top of its /usr/share/calamares/*
+# package defaults, so this never has to touch (or even confirm the
+# existence of) the real /usr/share/calamares/modules/unpackfs.conf the
+# installed calamares package ships. That stock file is written for
+# Manjaro's own rootfs/desktopfs/mhwdfs three-layer split, assembled per
+# ISO by manjaro-tools' buildiso -- a build pipeline this tool never runs.
+# Left in place, it points unpackfs at squashfs sources that don't exist
+# on a mabox-snapshot ISO, which is exactly what broke a real install
+# ("Bad unpackfs configuration", confirmed booting a built ISO in QEMU).
+UNPACKFS_CONF_PATH = "etc/calamares/modules/unpackfs.conf"
+
+UNPACKFS_ENTRY_TEMPLATE = """    - source: "/run/miso/bootmnt/{basedir}/{arch}/{name}.sfs"
+      sourcefs: "squashfs"
+      destination: ""
+"""
+
+
+def build_unpackfs_conf(
+    layer_names: list[str],
+    basedir: str = constants.MISO_BASEDIR,
+    arch: str = constants.ISO_ARCH,
+) -> str:
+    """One entry per squashfs layer this specific build actually produces
+    (see overlay.py's BuildPlan -- ["rootfs"] in preserving mode,
+    ["rootfs", "desktopfs"] in reset mode), at the path the miso boot hook
+    mounts the ISO's boot medium at. Never called for --encrypt builds:
+    rootfs then ships as rootfs.sfs.luks, which unpackfs's plain
+    sourcefs: "squashfs" can't read directly (it isn't unsquashed until
+    the miso_luks boot hook decrypts it at boot time) -- Calamares install
+    isn't supported for encrypted builds yet."""
+    entries = "".join(UNPACKFS_ENTRY_TEMPLATE.format(basedir=basedir, arch=arch, name=name) for name in layer_names)
+    return f"unpack:\n{entries}"
+
+
+def unpackfs_pseudo_specs(conf_path: Path) -> list[str]:
+    """mksquashfs -p specs injecting conf_path's contents (written by the
+    caller from build_unpackfs_conf()) at UNPACKFS_CONF_PATH inside the
+    squashed rootfs layer. The leading two dir entries are required, not
+    cosmetic -- verified empirically: mksquashfs's -p file spec fails
+    outright ('Pathname "etc" does not exist in filesystem') unless its
+    parent dirs are already real, and /etc/calamares/ (an admin-override
+    path Calamares only optionally reads) usually isn't, even on a host
+    with calamares itself installed. Declaring them as pseudo-dirs works
+    whether or not the real dir already exists (also verified). The
+    caller must also exclude UNPACKFS_CONF_PATH from the layer's own
+    source scan (see cli.py) -- if a real file already sits there,
+    mksquashfs silently keeps it over this pseudo-file instead."""
+    return [
+        "etc/calamares d 755 0 0",
+        "etc/calamares/modules d 755 0 0",
+        f"{UNPACKFS_CONF_PATH} f 644 0 0 cat {shlex.quote(str(conf_path))}",
+    ]

@@ -49,3 +49,13 @@ def test_build_command_includes_compression_level_when_given():
     cmd = squashfs.build_command(["/a"], "/out.sfs", None, "zstd", 5)
     assert "-Xcompression-level" in cmd
     assert "5" in cmd
+
+
+def test_build_command_includes_pseudo_file_specs_when_given():
+    cmd = squashfs.build_command(["/a"], "/out.sfs", None, "zstd", None, pseudo_files=["etc/foo f 644 0 0 cat /bar"])
+    assert cmd[-2:] == ["-p", "etc/foo f 644 0 0 cat /bar"]
+
+
+def test_build_command_omits_pseudo_flags_when_none():
+    cmd = squashfs.build_command(["/a"], "/out.sfs", None, "zstd", None)
+    assert "-p" not in cmd
