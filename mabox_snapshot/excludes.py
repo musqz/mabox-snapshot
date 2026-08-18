@@ -23,6 +23,46 @@ def _parse_lines(text: str) -> list[str]:
     return patterns
 
 
+class InvalidPatternError(ValueError):
+    """A user-typed exclude/include pattern mksquashfs's -ef file (always
+    used with -wildcards, see squashfs.py) can't accept. A leading '/',
+    './', or '../' is a FATAL ERROR at actual mksquashfs build time
+    ("FATAL ERROR: /, ./ and ../ prefixed excludes not supported with
+    -wildcards or -regex options", verified empirically) -- but that only
+    surfaces after a real build has already gone through --encrypt's
+    passphrase prompt and the change-notification prompt, wasting real
+    time. Catching it here, when the pattern is typed, is much cheaper.
+    The single most common cause: 'sudo mabox-snapshot excludes add
+    ~/foo' -- the invoking shell expands '~' using *your* $HOME before
+    sudo even runs, producing an absolute path like '/home/alice/foo'."""
+
+
+def _normalize_pattern(pattern: str) -> str:
+    """Raises InvalidPatternError for a pattern shaped like the mistake
+    above; auto-strips a bare leading '/' (the common, unambiguous case --
+    there's no legitimate reason a pattern would start with one, since
+    every pattern is already relative to the snapshot root) rather than
+    rejecting it outright, since the fix is unambiguous. Trailing slashes
+    are left alone -- verified empirically that mksquashfs handles
+    'foo/' identically to 'foo' for directory excludes, unlike a leading
+    slash."""
+    if pattern.startswith("~"):
+        raise InvalidPatternError(
+            f"pattern {pattern!r} starts with '~' -- shell tilde expansion happens before sudo runs, "
+            "using *your* $HOME, not root's, and mksquashfs doesn't understand '~' at all. Write out the "
+            "full path relative to the snapshot root instead, e.g. 'home/alice/Downloads'."
+        )
+    if pattern.startswith("./") or pattern.startswith("../"):
+        raise InvalidPatternError(
+            f"pattern {pattern!r} starts with './' or '../' -- mksquashfs rejects these outright at build "
+            "time. Write out the full path relative to the snapshot root instead, e.g. 'home/alice/Downloads'."
+        )
+    normalized = pattern.lstrip("/")
+    if not normalized:
+        raise InvalidPatternError(f"pattern {pattern!r} has no path left after stripping its leading '/'")
+    return normalized
+
+
 class ExcludeList:
     """Wraps the persisted, user-editable exclude-list file."""
 
@@ -38,11 +78,16 @@ class ExcludeList:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text("\n".join(patterns) + "\n" if patterns else "")
 
-    def add(self, pattern: str) -> None:
+    def add(self, pattern: str) -> str:
+        """Returns the pattern actually stored -- may differ from the
+        input if _normalize_pattern() stripped a leading '/'; the caller
+        (cli.py) uses this to tell the user when that happened."""
+        pattern = _normalize_pattern(pattern)
         patterns = self.load()
         if pattern not in patterns:
             patterns.append(pattern)
             self._save(patterns)
+        return pattern
 
     def remove(self, pattern: str) -> None:
         self._save([p for p in self.load() if p != pattern])
@@ -332,14 +377,17 @@ class OverrideRuleList:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(_format_rule_lines(rules) + "\n" if rules else "")
 
-    def add(self, action: str, pattern: str) -> None:
+    def add(self, action: str, pattern: str) -> str:
+        """Returns the pattern actually stored -- see ExcludeList.add()."""
         if action not in _RULE_ACTIONS:
             raise ValueError(f"action must be 'exclude' or 'include', got: {action!r}")
+        pattern = _normalize_pattern(pattern)
         rules = self.load()
         rule = OverrideRule(action=action, pattern=pattern)
         if rule not in rules:
             rules.append(rule)
             self._save(rules)
+        return pattern
 
     def remove(self, action: str, pattern: str) -> None:
         self._save([r for r in self.load() if not (r.action == action and r.pattern == pattern)])

@@ -435,7 +435,13 @@ def cmd_excludes_list(_args: argparse.Namespace) -> int:
 
 
 def cmd_excludes_add(args: argparse.Namespace) -> int:
-    excludes.ExcludeList().add(args.pattern)
+    try:
+        stored = excludes.ExcludeList().add(args.pattern)
+    except excludes.InvalidPatternError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    if stored != args.pattern:
+        print(f"note: stored as {stored!r} (patterns are relative to the snapshot root, no leading '/')", file=sys.stderr)
     return 0
 
 
@@ -488,7 +494,13 @@ def cmd_excludes_rules_list(args: argparse.Namespace) -> int:
 
 
 def cmd_excludes_rules_add(args: argparse.Namespace) -> int:
-    excludes.OverrideRuleList().add(args.action, args.pattern)
+    try:
+        stored = excludes.OverrideRuleList().add(args.action, args.pattern)
+    except excludes.InvalidPatternError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    if stored != args.pattern:
+        print(f"note: stored as {stored!r} (patterns are relative to the snapshot root, no leading '/')", file=sys.stderr)
     return 0
 
 

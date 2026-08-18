@@ -2,6 +2,8 @@ import os
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from mabox_snapshot import excludes, kernels
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -54,6 +56,65 @@ def test_exclude_list_add_dedupes_and_persists(tmp_path):
     el.add("proc/*")
 
     assert el.load() == ["dev/*", "proc/*"]
+
+
+def test_normalize_pattern_strips_leading_slash():
+    assert excludes._normalize_pattern("/home/alice/Downloads") == "home/alice/Downloads"
+
+
+def test_normalize_pattern_leaves_relative_pattern_untouched():
+    assert excludes._normalize_pattern("home/*/Downloads") == "home/*/Downloads"
+
+
+def test_normalize_pattern_leaves_trailing_slash_untouched():
+    # Verified empirically against a real mksquashfs build: a trailing
+    # slash excludes identically to the bare form, unlike a leading one.
+    assert excludes._normalize_pattern("home/alice/Downloads/") == "home/alice/Downloads/"
+
+
+def test_normalize_pattern_rejects_tilde():
+    with pytest.raises(excludes.InvalidPatternError):
+        excludes._normalize_pattern("~/Downloads")
+
+
+def test_normalize_pattern_rejects_dot_slash():
+    with pytest.raises(excludes.InvalidPatternError):
+        excludes._normalize_pattern("./Downloads")
+
+
+def test_normalize_pattern_rejects_dotdot_slash():
+    with pytest.raises(excludes.InvalidPatternError):
+        excludes._normalize_pattern("../Downloads")
+
+
+def test_normalize_pattern_allows_leading_dot_filename():
+    # Must not be confused with the './' prefix rejected above -- a
+    # legitimate hidden-file pattern starts with '.' but not './'.
+    assert excludes._normalize_pattern("home/*/.bashrc") == "home/*/.bashrc"
+
+
+def test_normalize_pattern_rejects_bare_slash():
+    with pytest.raises(excludes.InvalidPatternError):
+        excludes._normalize_pattern("/")
+
+
+def test_exclude_list_add_strips_leading_slash_and_returns_stored_value(tmp_path):
+    path = tmp_path / "excludes.list"
+    el = excludes.ExcludeList(path)
+
+    stored = el.add("/home/alice/Downloads")
+
+    assert stored == "home/alice/Downloads"
+    assert el.load() == ["home/alice/Downloads"]
+
+
+def test_exclude_list_add_rejects_tilde(tmp_path):
+    path = tmp_path / "excludes.list"
+    el = excludes.ExcludeList(path)
+
+    with pytest.raises(excludes.InvalidPatternError):
+        el.add("~/Downloads")
+    assert el.load() == []
 
 
 def test_exclude_list_remove(tmp_path):

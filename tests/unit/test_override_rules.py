@@ -155,6 +155,25 @@ def test_override_rule_list_add_dedupes_and_persists(tmp_path):
     ]
 
 
+def test_override_rule_list_add_strips_leading_slash_and_returns_stored_value(tmp_path):
+    path = tmp_path / "overrides.list"
+    rl = excludes.OverrideRuleList(path)
+
+    stored = rl.add("exclude", "/home/alice/Documents")
+
+    assert stored == "home/alice/Documents"
+    assert rl.load() == [excludes.OverrideRule("exclude", "home/alice/Documents")]
+
+
+def test_override_rule_list_add_rejects_tilde(tmp_path):
+    path = tmp_path / "overrides.list"
+    rl = excludes.OverrideRuleList(path)
+
+    with pytest.raises(excludes.InvalidPatternError):
+        rl.add("include", "~/Documents/Custom_map")
+    assert rl.load() == []
+
+
 def test_override_rule_list_remove(tmp_path):
     path = tmp_path / "overrides.list"
     rl = excludes.OverrideRuleList(path)
