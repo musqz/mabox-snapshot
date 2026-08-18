@@ -1,4 +1,3 @@
-import re
 from pathlib import Path
 
 from mabox_snapshot import calamares, constants
@@ -115,18 +114,19 @@ def test_build_unpackfs_conf_encrypt_only_affects_rootfs_layer():
     assert "desktopfs.sfs" in conf
 
 
-def test_miso_luks_hook_mounts_at_the_constant_path():
-    # Regression tripwire: miso_luks builds the mount path from two shell
-    # vars ("${dest_sfs}/${sfs}"), not a literal string, so this can't just
-    # grep for the constant -- it checks the two pieces that combine to it
-    # instead, so the Python constant and the shell hook can't silently
-    # drift apart.
-    hook_text = Path(__file__).parents[2].joinpath("configs/initcpio/hooks/miso_luks").read_text()
-    dest_sfs, _, sfs_name = constants.MISO_LUKS_LIVE_ROOTFS_MOUNT.rpartition("/")
-    assert f'dest_sfs="{dest_sfs}"' in hook_text
-    assert '"${dest_sfs}/${sfs}"' in hook_text
-    loop_line = next(line for line in hook_text.splitlines() if line.strip().startswith("for sfs in "))
-    assert re.search(rf"\b{re.escape(sfs_name)}\b", loop_line)
+def test_live_source_unit_remounts_at_the_constant_path():
+    # Regression tripwire: the systemd unit that remounts the already-
+    # unlocked dm-crypt device (see constants.MISO_LUKS_LIVE_ROOTFS_MOUNT's
+    # docstring for why it exists -- the boot hook's own mount doesn't
+    # survive switch_root) must actually mount at the same path this
+    # constant says it does, so the Python side and the shipped unit file
+    # can't silently drift apart.
+    unit_text = Path(__file__).parents[2].joinpath(
+        "systemd/system/mabox-snapshot-live-source.service"
+    ).read_text()
+    assert constants.MISO_LUKS_LIVE_ROOTFS_MOUNT in unit_text
+    assert f"ConditionPathExists=/dev/mapper/{constants.ISO_LUKS_MAPPER_NAME}" in unit_text
+    assert f"mount -o ro /dev/mapper/{constants.ISO_LUKS_MAPPER_NAME}" in unit_text
 
 
 def test_unpackfs_pseudo_specs_declares_parent_dirs_before_the_file():

@@ -256,16 +256,20 @@ UNPACKFS_ENTRY_TEMPLATE = """    - source: "/run/miso/bootmnt/{basedir}/{arch}/{
 
 # --encrypt builds ship rootfs.sfs.luks instead of a plaintext rootfs.sfs --
 # unpackfs's plain sourcefs: "squashfs" can't decrypt LUKS, so it can't read
-# that file directly. But by the time Calamares runs, the live session has
-# already decrypted and mounted it (miso_luks's boot hook, for the live
-# session itself) at constants.MISO_LUKS_LIVE_ROOTFS_MOUNT -- an ordinary
-# mounted directory. Calamares' unpackfs module supports exactly this via
-# sourcefs: "file" (verified against the installed calamares package:
-# UnpackEntry.is_file() skips mounting entirely and rsyncs straight from
-# source), so point it at the already-decrypted live mount instead of
-# teaching Calamares to do LUKS decryption itself (which would mean
-# re-prompting for the passphrase inside the installer UI for no benefit
-# over reusing bytes that are already decrypted).
+# that file directly. The live boot hook (miso_luks) already decrypts it
+# once, early in the initramfs, to build the live session's own root -- but
+# that mount doesn't survive switch_root, so a separate systemd unit
+# (systemd/system/mabox-snapshot-live-source.service, enabled by default)
+# remounts the already-unlocked dm-crypt device at
+# constants.MISO_LUKS_LIVE_ROOTFS_MOUNT once the real system is up (see
+# that constant's docstring for the full story -- verified empirically,
+# not a guess). Calamares' unpackfs module supports reading an ordinary
+# mounted directory via sourcefs: "file" (verified against the installed
+# calamares package: UnpackEntry.is_file() skips mounting entirely and
+# rsyncs straight from source), so point it there instead of teaching
+# Calamares to do LUKS decryption itself (which would mean re-prompting
+# for the passphrase inside the installer UI for no benefit over reusing
+# bytes that are already decrypted).
 UNPACKFS_FILE_ENTRY_TEMPLATE = """    - source: "{path}"
       sourcefs: "file"
       destination: ""

@@ -68,6 +68,16 @@ package() {
     install -Dm644 systemd/system/mabox-snapshot.timer \
         "$pkgdir/usr/lib/systemd/system/mabox-snapshot.timer"
 
+    # Enabled by default (unlike the two above, which are opt-in
+    # automation): a live boot of a --encrypt build needs this to install
+    # correctly at all, and it's a no-op everywhere else via its own
+    # ConditionPathExists -- see the unit's own comments for why it exists.
+    install -Dm644 systemd/system/mabox-snapshot-live-source.service \
+        "$pkgdir/usr/lib/systemd/system/mabox-snapshot-live-source.service"
+    install -d "$pkgdir/usr/lib/systemd/system/multi-user.target.wants"
+    ln -sf ../mabox-snapshot-live-source.service \
+        "$pkgdir/usr/lib/systemd/system/multi-user.target.wants/mabox-snapshot-live-source.service"
+
     install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 
     # Umask-safety pass -- see mabox_snapshot/permissions.py's docstring for

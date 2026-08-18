@@ -137,17 +137,30 @@ LUKS_CONTAINER_SUFFIX = ".luks"
 # source of truth to keep the shell copy in sync with, not a runtime link.
 ISO_LUKS_MAPPER_NAME = "mabox_rootfs"
 
-# Where miso_luks's _mnt_luks_sfs() mounts the decrypted rootfs during LIVE
-# BOOT (miso_mount_handler()'s dest_sfs="/run/miso/sfs" + the "rootfs" loop
-# var) -- the only plaintext copy of an --encrypt build's rootfs that ever
-# exists, since luks.py deletes the workdir plaintext immediately after
-# encrypting and the ISO tree only ever ships the .sfs.luks container. It's
-# guaranteed mounted for the whole live session (one of the live root's own
-# overlayfs lowerdirs), so Calamares' unpackfs module can read it directly
-# via a "file" sourcefs entry instead of trying to decrypt the .luks
-# container itself. Same manual-sync-with-shell precedent as
-# ISO_LUKS_MAPPER_NAME above -- keep in sync by hand if either changes.
-MISO_LUKS_LIVE_ROOTFS_MOUNT = "/run/miso/sfs/rootfs"
+# mabox-snapshot-live-source.service remounts the already-unlocked
+# dm-crypt mapper (see ISO_LUKS_MAPPER_NAME) here, read-only, early in
+# every boot -- a no-op everywhere except a live boot of an --encrypt
+# build, guarded by the unit's own ConditionPathExists. This is NOT the
+# path miso_luks's _mnt_luks_sfs() itself mounts the decrypted rootfs at
+# during boot (/run/miso/sfs/rootfs) -- that mount does not survive
+# switch_root into the running system (verified empirically: it's an
+# empty, orphaned directory afterward, even from PID 1's own mount
+# namespace, even though the live session keeps working fine regardless,
+# since overlayfs doesn't need that original mount path to stay valid
+# once it's already built the live root from it). The underlying
+# dm-crypt mapping itself DOES survive (/dev is reliably carried over),
+# so this unit just remounts that already-unlocked device somewhere
+# stable -- no second passphrase prompt needed. Calamares' unpackfs
+# module reads from here via a "file" sourcefs entry instead of trying
+# to decrypt the .luks container itself. Same manual-sync-with-shell
+# precedent as ISO_LUKS_MAPPER_NAME above -- keep in sync by hand with
+# systemd/system/mabox-snapshot-live-source.service if either changes.
+MISO_LUKS_LIVE_ROOTFS_MOUNT = "/run/mabox-snapshot/live-source"
+
+# Installed by packaging/PKGBUILD alongside the package itself, enabled
+# by default -- the second signal (alongside MISO_LUKS_HOOK_INSTALLED)
+# that an --encrypt build's install can actually work on this host.
+MISO_LUKS_LIVE_SOURCE_UNIT_INSTALLED = Path("/usr/lib/systemd/system/mabox-snapshot-live-source.service")
 
 # User-editable branding source, same convention as EXCLUDES_LIST_FILE
 # (plain directory under /etc/mabox-snapshot, no separate per-user split).

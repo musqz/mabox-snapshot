@@ -76,10 +76,27 @@ def build_dd_copy_command(src: Path, mapper_dev: str, block_size: str = "4M") ->
     return ["dd", f"if={src}", f"of={mapper_dev}", f"bs={block_size}", "status=progress", "conv=fsync"]
 
 
-def check_hook_installed(hook_path: Path = constants.MISO_LUKS_HOOK_INSTALLED) -> None:
+def check_hook_installed(
+    hook_path: Path = constants.MISO_LUKS_HOOK_INSTALLED,
+    live_source_unit_path: Path = constants.MISO_LUKS_LIVE_SOURCE_UNIT_INSTALLED,
+) -> None:
+    """Both pieces this build host needs to produce a --encrypt build whose
+    ISO can actually be installed: the initcpio hook that decrypts rootfs
+    at live boot, and the systemd unit that remounts it somewhere stable
+    for Calamares afterward (see constants.MISO_LUKS_LIVE_ROOTFS_MOUNT's
+    docstring for why the latter exists -- without it, the live boot hook's
+    own mount doesn't survive switch_root, and Calamares silently copies
+    almost nothing). Checked at build time so a broken/partial install
+    fails here with a clear message, not deep inside a real install
+    attempt on a different machine much later."""
     if not hook_path.exists():
         raise FileNotFoundError(
             f"LUKS boot hook not found at {hook_path} -- is mabox-snapshot installed via its package?"
+        )
+    if not live_source_unit_path.exists():
+        raise FileNotFoundError(
+            f"live-source systemd unit not found at {live_source_unit_path} -- "
+            "is mabox-snapshot installed via its package?"
         )
 
 

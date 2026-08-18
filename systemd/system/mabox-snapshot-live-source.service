@@ -1,0 +1,35 @@
+[Unit]
+Description=Remount the decrypted live rootfs at a stable path for Calamares
+Documentation=https://github.com/musqz/mabox-snapshot
+# --encrypt builds' rootfs.sfs.luks is decrypted once, early in the
+# initramfs, by the miso_luks boot hook (configs/initcpio/hooks/miso_luks's
+# _mnt_luks_sfs()) -- but that mount, at /run/miso/sfs/rootfs, does not
+# survive switch_root into the running system (verified: it's an empty,
+# orphaned directory post-boot, even from PID 1's own mount namespace,
+# while the live desktop session keeps working fine regardless, since
+# overlayfs doesn't need the original mount path to stay valid once it's
+# already built the live root from it). The underlying dm-crypt mapping
+# itself (/dev/mapper/mabox_rootfs -- must match
+# mabox_snapshot.constants.ISO_LUKS_MAPPER_NAME) DOES survive, since /dev
+# is reliably carried over. This unit just remounts that already-unlocked
+# device at a fresh, stable path Calamares' unpackfs can actually read
+# from (mabox_snapshot.constants.MISO_LUKS_LIVE_ROOTFS_MOUNT) -- no
+# second passphrase prompt needed, since the mapping is already unlocked.
+#
+# A silent no-op on every system except a live boot of an --encrypt
+# build: ConditionPathExists skips this unit entirely when the mapper
+# device doesn't exist (every installed system, and non-encrypted live
+# boots), so it's safe to enable unconditionally on every install.
+ConditionPathExists=/dev/mapper/mabox_rootfs
+DefaultDependencies=no
+After=local-fs-pre.target
+Before=multi-user.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/mkdir -p /run/mabox-snapshot/live-source
+ExecStart=/usr/bin/mount -o ro /dev/mapper/mabox_rootfs /run/mabox-snapshot/live-source
+
+[Install]
+WantedBy=multi-user.target
