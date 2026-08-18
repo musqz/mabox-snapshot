@@ -7,6 +7,15 @@ def test_load_defaults_when_no_files_exist(tmp_path):
     cfg = config.load(system_path=tmp_path / "system.conf", user_path=tmp_path / "user.conf")
     assert cfg.compression == "zstd"
     assert cfg.workdir == config.SnapshotConfig().workdir
+    assert cfg.profile == "full"
+
+
+def test_load_coerces_profile_field(tmp_path):
+    system = tmp_path / "system.conf"
+    system.write_text('profile = "lean"\n')
+
+    cfg = config.load(system_path=system, user_path=tmp_path / "user.conf")
+    assert cfg.profile == "lean"
 
 
 def test_user_config_overrides_system_config(tmp_path):

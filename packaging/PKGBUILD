@@ -1,6 +1,6 @@
 # Maintainer: musqz
 pkgname=mabox-snapshot-git
-pkgver=r37.e6ef777
+pkgver=r40.1a4b758
 pkgrel=1
 pkgdesc="Snapshot a running Mabox Linux system into a bootable live/install ISO"
 arch=('any')

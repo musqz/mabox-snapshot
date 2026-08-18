@@ -7,11 +7,13 @@ from mabox_snapshot import overlay, squashfs
 
 @pytest.fixture(autouse=True)
 def _no_real_mounts(monkeypatch, tmp_path):
-    """resolve_plan() reads the live host's mount table by default (via
-    excludes.detect_foreign_mount_excludes()) -- point it at a path that
-    doesn't exist so these tests stay hermetic regardless of what's
-    mounted on the machine running them."""
+    """resolve_plan() reads the live host's mount table and override-rules
+    file by default (via excludes.detect_foreign_mount_excludes() and
+    excludes.OverrideRuleList()) -- point both at paths that don't exist
+    so these tests stay hermetic regardless of what's mounted or
+    configured on the machine running them."""
     monkeypatch.setattr(overlay.constants, "MOUNTS_FILE", tmp_path / "mounts-not-present")
+    monkeypatch.setattr(overlay.constants, "OVERRIDE_RULES_FILE", tmp_path / "overrides-not-present")
 
 
 def test_resolve_plan_preserving_has_single_rootfs_layer(tmp_path):
@@ -113,6 +115,23 @@ def test_resolve_plan_rootfs_layer_excludes_separate_output_dir(tmp_path):
 
     assert f"{workdir.relative_to('/')}/*" in plan.layers[0].exclude_patterns
     assert f"{output_dir.relative_to('/')}/*" in plan.layers[0].exclude_patterns
+
+
+def test_resolve_plan_threads_override_rules_into_rootfs_layer(tmp_path):
+    exclude_list = tmp_path / "excludes.list"
+    exclude_list.write_text("")
+    override_rules = tmp_path / "overrides.list"
+    override_rules.write_text("exclude home/*/Documents\ninclude home/*/Documents/Custom_map\n")
+    (tmp_path / "home" / "alice" / "Documents" / "Custom_map").mkdir(parents=True)
+    (tmp_path / "home" / "alice" / "Documents" / "Other").mkdir(parents=True)
+
+    plan = overlay.resolve_plan(
+        "preserving", tmp_path / "work", exclude_list,
+        override_rules_path=override_rules, override_root=tmp_path,
+    )
+
+    assert "home/alice/Documents/Other" in plan.layers[0].exclude_patterns
+    assert "home/alice/Documents/Custom_map" not in plan.layers[0].exclude_patterns
 
 
 def test_resolve_plan_rejects_unknown_mode(tmp_path):
