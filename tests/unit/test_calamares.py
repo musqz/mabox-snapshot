@@ -1,5 +1,4 @@
-import re
-from pathlib import Path
+import pytest
 
 from mabox_snapshot import calamares, constants
 
@@ -115,18 +114,32 @@ def test_build_unpackfs_conf_encrypt_only_affects_rootfs_layer():
     assert "desktopfs.sfs" in conf
 
 
-def test_miso_luks_hook_mounts_at_the_constant_path():
-    # Regression tripwire: miso_luks builds the mount path from two shell
-    # vars ("${dest_sfs}/${sfs}"), not a literal string, so this can't just
-    # grep for the constant -- it checks the two pieces that combine to it
-    # instead, so the Python constant and the shell hook can't silently
-    # drift apart.
-    hook_text = Path(__file__).parents[2].joinpath("configs/initcpio/hooks/miso_luks").read_text()
-    dest_sfs, _, sfs_name = constants.MISO_LUKS_LIVE_ROOTFS_MOUNT.rpartition("/")
-    assert f'dest_sfs="{dest_sfs}"' in hook_text
-    assert '"${dest_sfs}/${sfs}"' in hook_text
-    loop_line = next(line for line in hook_text.splitlines() if line.strip().startswith("for sfs in "))
-    assert re.search(rf"\b{re.escape(sfs_name)}\b", loop_line)
+def test_build_shellprocess_remount_conf_contains_mount_point_and_mapper():
+    conf = calamares.build_shellprocess_remount_conf(mount_point="/run/mabox-snapshot/live-source", mapper_name="mabox_rootfs")
+    assert "dontChroot: true" in conf
+    assert "mkdir -p /run/mabox-snapshot/live-source" in conf
+    assert "mountpoint -q /run/mabox-snapshot/live-source" in conf
+    assert "mount -o ro /dev/mapper/mabox_rootfs /run/mabox-snapshot/live-source" in conf
+
+
+def test_build_shellprocess_remount_conf_defaults_match_constants():
+    conf = calamares.build_shellprocess_remount_conf()
+    assert constants.MISO_LUKS_LIVE_ROOTFS_MOUNT in conf
+    assert constants.ISO_LUKS_MAPPER_NAME in conf
+
+
+def test_insert_live_source_job_inserts_before_unpackfs_preserving_indent():
+    settings = "sequence:\n- exec:\n  - partition\n  - mount\n  - unpackfs\n  - machineid\n"
+    result = calamares.insert_live_source_job(settings)
+    lines = result.splitlines()
+    assert f"  - {calamares.SHELLPROCESS_INSTANCE}" in lines
+    unpackfs_index = lines.index("  - unpackfs")
+    assert lines[unpackfs_index - 1] == f"  - {calamares.SHELLPROCESS_INSTANCE}"
+
+
+def test_insert_live_source_job_raises_when_unpackfs_missing():
+    with pytest.raises(ValueError):
+        calamares.insert_live_source_job("sequence:\n- exec:\n  - partition\n  - mount\n")
 
 
 def test_unpackfs_pseudo_specs_declares_parent_dirs_before_the_file():
@@ -140,3 +153,22 @@ def test_unpackfs_pseudo_specs_declares_parent_dirs_before_the_file():
 def test_unpackfs_pseudo_specs_quotes_a_path_with_spaces():
     specs = calamares.unpackfs_pseudo_specs("/work dir/unpackfs.conf")
     assert "'/work dir/unpackfs.conf'" in specs[2]
+
+
+def test_unpackfs_pseudo_specs_encrypt_false_is_unaffected():
+    specs = calamares.unpackfs_pseudo_specs("/work/unpackfs.conf")
+    assert len(specs) == 3
+
+
+def test_unpackfs_pseudo_specs_encrypt_true_injects_settings_and_shellprocess():
+    specs = calamares.unpackfs_pseudo_specs(
+        "/work/unpackfs.conf",
+        encrypt=True,
+        settings_conf_path="/work/settings-encrypt.conf",
+        shellprocess_conf_path="/work/shellprocess-remount.conf",
+    )
+    assert len(specs) == 5
+    settings_spec = next(s for s in specs if s.startswith(calamares.SETTINGS_CONF_TARGET_PATH))
+    assert settings_spec.endswith("/work/settings-encrypt.conf")
+    shellprocess_spec = next(s for s in specs if s.startswith(calamares.SHELLPROCESS_CONF_TARGET_PATH))
+    assert shellprocess_spec.endswith("/work/shellprocess-remount.conf")

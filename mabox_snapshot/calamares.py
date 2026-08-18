@@ -201,13 +201,22 @@ def build_show_qml(branding: BrandingConfig) -> str:
     return SHOW_QML_TEMPLATE.format(slides="\n".join(slide_lines), radius=branding.radius)
 
 
+# Target path Calamares reads settings.conf overrides from -- Calamares
+# layers /etc/calamares/* on top of its /usr/share/calamares/* package
+# defaults. Shared between write_settings_override() (reset-mode
+# branding, written into the overlay layer) and build_unpackfs_conf's
+# --encrypt path below (written via mksquashfs pseudo-file straight into
+# the rootfs layer, since preserving mode has no overlay to write into).
+SETTINGS_CONF_TARGET_PATH = "etc/calamares/settings.conf"
+
+
 def write_settings_override(overlay_dir: Path, source: Path = constants.CALAMARES_SETTINGS_FILE) -> None:
     """A copy of Calamares' own tested settings.conf with only the
     'branding:' line repointed at the mabox component -- the install
     sequence itself is never touched."""
     text = source.read_text()
     new_text = re.sub(r"(?m)^branding:\s*\S+", f"branding: {constants.CALAMARES_BRANDING_COMPONENT}", text)
-    dest = overlay_dir / "etc/calamares/settings.conf"
+    dest = overlay_dir / SETTINGS_CONF_TARGET_PATH
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(new_text)
 
@@ -256,20 +265,75 @@ UNPACKFS_ENTRY_TEMPLATE = """    - source: "/run/miso/bootmnt/{basedir}/{arch}/{
 
 # --encrypt builds ship rootfs.sfs.luks instead of a plaintext rootfs.sfs --
 # unpackfs's plain sourcefs: "squashfs" can't decrypt LUKS, so it can't read
-# that file directly. But by the time Calamares runs, the live session has
-# already decrypted and mounted it (miso_luks's boot hook, for the live
-# session itself) at constants.MISO_LUKS_LIVE_ROOTFS_MOUNT -- an ordinary
-# mounted directory. Calamares' unpackfs module supports exactly this via
-# sourcefs: "file" (verified against the installed calamares package:
-# UnpackEntry.is_file() skips mounting entirely and rsyncs straight from
-# source), so point it at the already-decrypted live mount instead of
-# teaching Calamares to do LUKS decryption itself (which would mean
-# re-prompting for the passphrase inside the installer UI for no benefit
-# over reusing bytes that are already decrypted).
+# that file directly. The live boot hook (miso_luks) already decrypts it
+# once, early in the initramfs, to build the live session's own root, but
+# that mount (/run/miso/sfs/rootfs) doesn't survive switch_root -- and,
+# verified the hard way in a real VM, a *second* mount made later at boot
+# (the first fix attempt here, a systemd unit) isn't reliable either: it
+# can go empty again well after boot, for reasons that were never fully
+# pinned down, with no guarantee it's still populated by whenever Calamares
+# actually gets run. The only mount that's provably still valid is one made
+# *immediately* before it's read -- so build_unpackfs_conf()'s --encrypt
+# path pairs sourcefs: "file" (verified against the installed calamares
+# package: UnpackEntry.is_file() skips mounting entirely and rsyncs
+# straight from source) with a shellprocess job (see
+# build_shellprocess_remount_conf()/insert_live_source_job() below)
+# injected immediately before unpackfs in Calamares' own exec sequence,
+# so the remount and the read happen back to back with no gap for
+# anything to disturb in between.
 UNPACKFS_FILE_ENTRY_TEMPLATE = """    - source: "{path}"
       sourcefs: "file"
       destination: ""
 """
+
+# Named module instance, per Calamares' own convention (confirmed against
+# a real reference config on this host, ~/Github/penguins-eggs -- a
+# similar Calamares-based remaster tool solving the same "run something
+# in the live environment before the real install" problem): a
+# `module@instanceId` sequence entry pairs with a
+# `modules/module@instanceId.conf` file, literal '@' included.
+SHELLPROCESS_INSTANCE = "shellprocess@mabox-remount-live-source"
+SHELLPROCESS_CONF_TARGET_PATH = f"etc/calamares/modules/{SHELLPROCESS_INSTANCE}.conf"
+
+SHELLPROCESS_REMOUNT_CONF_TEMPLATE = """---
+i18n:
+    name: "Remounting decrypted rootfs for install..."
+
+dontChroot: true
+timeout: 30
+script:
+    - "mkdir -p {mount_point}"
+    - "mountpoint -q {mount_point} || mount -o ro /dev/mapper/{mapper_name} {mount_point}"
+"""
+
+
+def build_shellprocess_remount_conf(
+    mount_point: str = constants.MISO_LUKS_LIVE_ROOTFS_MOUNT,
+    mapper_name: str = constants.ISO_LUKS_MAPPER_NAME,
+) -> str:
+    """dontChroot: true runs this in the live/host environment (the target
+    doesn't exist yet at this point in the sequence). The mountpoint -q
+    guard makes it idempotent -- a no-op if something already mounted it
+    -- and, deliberately, the mount command has no leading '-': per
+    shellprocess's own convention a command that isn't '-'-prefixed
+    aborts the install on failure, which is exactly right here. Better a
+    loud, immediate failure than silently unpacking an empty source."""
+    return SHELLPROCESS_REMOUNT_CONF_TEMPLATE.format(mount_point=mount_point, mapper_name=mapper_name)
+
+
+def insert_live_source_job(settings_text: str) -> str:
+    """Inserts SHELLPROCESS_INSTANCE immediately before the '- unpackfs'
+    line in settings.conf's exec sequence, preserving its exact
+    indentation. Raises ValueError if that anchor line isn't found --
+    fail loudly if Calamares' upstream settings.conf format ever changes
+    unexpectedly, rather than silently produce a settings.conf that never
+    runs the remount job at all."""
+    match = re.search(r"(?m)^([ \t]*)- unpackfs[ \t]*$", settings_text)
+    if match is None:
+        raise ValueError("settings.conf has no '- unpackfs' line in its exec sequence -- can't insert the remount job")
+    indent = match.group(1)
+    insertion = f"{indent}- {SHELLPROCESS_INSTANCE}\n"
+    return settings_text[: match.start()] + insertion + settings_text[match.start() :]
 
 
 def build_unpackfs_conf(
@@ -295,7 +359,12 @@ def build_unpackfs_conf(
     return f"unpack:\n{''.join(entries)}"
 
 
-def unpackfs_pseudo_specs(conf_path: Path) -> list[str]:
+def unpackfs_pseudo_specs(
+    conf_path: Path,
+    encrypt: bool = False,
+    settings_conf_path: Path | None = None,
+    shellprocess_conf_path: Path | None = None,
+) -> list[str]:
     """mksquashfs -p specs injecting conf_path's contents (written by the
     caller from build_unpackfs_conf()) at UNPACKFS_CONF_PATH inside the
     squashed rootfs layer. The leading two dir entries are required, not
@@ -307,9 +376,26 @@ def unpackfs_pseudo_specs(conf_path: Path) -> list[str]:
     whether or not the real dir already exists (also verified). The
     caller must also exclude UNPACKFS_CONF_PATH from the layer's own
     source scan (see cli.py) -- if a real file already sits there,
-    mksquashfs silently keeps it over this pseudo-file instead."""
-    return [
+    mksquashfs silently keeps it over this pseudo-file instead.
+
+    encrypt=True additionally injects a modified settings.conf (with the
+    remount job spliced into its exec sequence, see
+    insert_live_source_job()) and the remount job's own module config
+    (see build_shellprocess_remount_conf()) -- reusing the same two
+    pseudo-dirs above, since both new files live under them too. Callers
+    must pass settings_conf_path/shellprocess_conf_path (and exclude both
+    their target paths from the layer's own source scan, same reasoning
+    as UNPACKFS_CONF_PATH) whenever encrypt=True. There's no permanent,
+    on-disk file to generate these from: preserving mode has no overlay
+    step to write into (that's reset-mode only), and writing straight to
+    the *build host's own* /etc/calamares would mean permanently altering
+    the machine's real installer config just to build a snapshot."""
+    specs = [
         "etc/calamares d 755 0 0",
         "etc/calamares/modules d 755 0 0",
         f"{UNPACKFS_CONF_PATH} f 644 0 0 cat {shlex.quote(str(conf_path))}",
     ]
+    if encrypt:
+        specs.append(f"{SETTINGS_CONF_TARGET_PATH} f 644 0 0 cat {shlex.quote(str(settings_conf_path))}")
+        specs.append(f"{SHELLPROCESS_CONF_TARGET_PATH} f 644 0 0 cat {shlex.quote(str(shellprocess_conf_path))}")
+    return specs

@@ -156,17 +156,36 @@ def cmd_create(args: argparse.Namespace) -> int:
     mkinitcpio_conf = cfg.workdir / "mkinitcpio-miso.conf"
 
     # For --encrypt builds, build_unpackfs_conf() points the rootfs entry at
-    # the live session's already-decrypted mount instead of the on-media
-    # squashfs (see its docstring) -- always generated, never skipped.
+    # the live session's decrypted mount instead of the on-media squashfs
+    # (see its docstring) -- always generated, never skipped. --encrypt
+    # also needs two more injected files so that mount is actually there
+    # by the time unpackfs reads it: a settings.conf with a remount job
+    # spliced in right before unpackfs, and that job's own module config
+    # (see calamares.py's insert_live_source_job()/
+    # build_shellprocess_remount_conf() for why -- a boot-time-only mount
+    # isn't reliable enough on its own).
+    # Paths only, same as unpackfs_conf_path itself -- nothing gets written
+    # until after the dry-run check and workdir/root setup below, same
+    # convention unpackfs_conf_path.write_text() already follows further
+    # down.
     unpackfs_conf_path = cfg.workdir / "unpackfs.conf"
-    unpackfs_pseudo = calamares.unpackfs_pseudo_specs(unpackfs_conf_path)
+    settings_conf_path = cfg.workdir / "settings-encrypt.conf" if cfg.encrypt else None
+    shellprocess_conf_path = cfg.workdir / "shellprocess-remount.conf" if cfg.encrypt else None
+    unpackfs_pseudo = calamares.unpackfs_pseudo_specs(
+        unpackfs_conf_path,
+        encrypt=cfg.encrypt,
+        settings_conf_path=settings_conf_path,
+        shellprocess_conf_path=shellprocess_conf_path,
+    )
     # Always the rootfs layer (plan.layers[0] in both modes, same as the
     # "new_excludes" case further down): without this, a real file already
-    # sitting at that path (e.g. a hand-placed admin workaround for this
-    # very bug) would silently win over our pseudo-file -- verified
-    # empirically, mksquashfs just warns and keeps whatever's already in
-    # the source tree.
+    # sitting at one of these paths (e.g. a hand-placed admin workaround)
+    # would silently win over our pseudo-file -- verified empirically,
+    # mksquashfs just warns and keeps whatever's already in the source tree.
     plan.layers[0].exclude_patterns.append(calamares.UNPACKFS_CONF_PATH)
+    if cfg.encrypt:
+        plan.layers[0].exclude_patterns.append(calamares.SETTINGS_CONF_TARGET_PATH)
+        plan.layers[0].exclude_patterns.append(calamares.SHELLPROCESS_CONF_TARGET_PATH)
 
     # Per-layer destinations (see overlay.py's module docstring for why
     # each layer is built by its own single-source mksquashfs invocation).
@@ -236,7 +255,7 @@ def cmd_create(args: argparse.Namespace) -> int:
         note = f"{len(branding.slides)} slide(s) from {constants.IMAGES_DIR}" if branding else "none configured -- stock Manjaro branding"
         print(f"calamares:   {note}")
     if cfg.encrypt:
-        print(f"unpackfs:    {', '.join(layer.name for layer in plan.layers)} -> {unpackfs_conf_path} (rootfs sourced from live decrypted mount, not on-media squashfs)")
+        print(f"unpackfs:    {', '.join(layer.name for layer in plan.layers)} -> {unpackfs_conf_path} (rootfs sourced from live decrypted mount, remounted by an injected Calamares job right before unpackfs runs)")
     else:
         print(f"unpackfs:    {', '.join(layer.name for layer in plan.layers)} -> {unpackfs_conf_path}")
     print(f"bios boot:   {' '.join(str(c) for c in bios_cmd)}")
@@ -340,6 +359,11 @@ def cmd_create(args: argparse.Namespace) -> int:
     unpackfs_conf_path.write_text(
         calamares.build_unpackfs_conf([layer.name for layer in plan.layers], encrypt=cfg.encrypt)
     )
+    if cfg.encrypt:
+        settings_conf_path.write_text(
+            calamares.insert_live_source_job(constants.CALAMARES_SETTINGS_FILE.read_text())
+        )
+        shellprocess_conf_path.write_text(calamares.build_shellprocess_remount_conf())
 
     for layer in plan.layers:
         if exclude_files[layer.name] is not None:
