@@ -132,6 +132,21 @@ def cmd_create(args: argparse.Namespace) -> int:
     iso_root = cfg.workdir / "iso"
     mkinitcpio_conf = cfg.workdir / "mkinitcpio-miso.conf"
 
+    # Skipped for --encrypt: rootfs then ships as rootfs.sfs.luks, which
+    # Calamares' unpackfs can't unsquash directly (see build_unpackfs_conf's
+    # docstring) -- leaving the stock, also-broken config in place rather
+    # than fabricating an entry that just fails a different way.
+    unpackfs_conf_path = cfg.workdir / "unpackfs.conf"
+    unpackfs_pseudo = None if cfg.encrypt else calamares.unpackfs_pseudo_specs(unpackfs_conf_path)
+    if unpackfs_pseudo is not None:
+        # Always the rootfs layer (plan.layers[0] in both modes, same as
+        # the "new_excludes" case further down): without this, a real
+        # file already sitting at that path (e.g. a hand-placed admin
+        # workaround for this very bug) would silently win over our
+        # pseudo-file -- verified empirically, mksquashfs just warns and
+        # keeps whatever's already in the source tree.
+        plan.layers[0].exclude_patterns.append(calamares.UNPACKFS_CONF_PATH)
+
     # Per-layer destinations (see overlay.py's module docstring for why
     # each layer is built by its own single-source mksquashfs invocation).
     # --encrypt only ever applies to preserving mode's sole "rootfs" layer
@@ -161,7 +176,8 @@ def cmd_create(args: argparse.Namespace) -> int:
 
     layer_cmds = {
         layer.name: squashfs.build_command(
-            [layer.source], layer_dest[layer.name], exclude_files[layer.name], cfg.compression, cfg.compression_level
+            [layer.source], layer_dest[layer.name], exclude_files[layer.name], cfg.compression, cfg.compression_level,
+            pseudo_files=unpackfs_pseudo if layer.name == "rootfs" else None,
         )
         for layer in plan.layers
     }
@@ -197,6 +213,10 @@ def cmd_create(args: argparse.Namespace) -> int:
     if args.mode == "reset":
         note = f"{len(branding.slides)} slide(s) from {constants.IMAGES_DIR}" if branding else "none configured -- stock Manjaro branding"
         print(f"calamares:   {note}")
+    if cfg.encrypt:
+        print("unpackfs:    skipped (--encrypt: Calamares install isn't supported for encrypted builds yet)")
+    else:
+        print(f"unpackfs:    {', '.join(layer.name for layer in plan.layers)} -> {unpackfs_conf_path}")
     print(f"bios boot:   {' '.join(str(c) for c in bios_cmd)}")
     print(f"efi boot:    {' '.join(str(c) for c in efi_cmd)}")
     print(f"assemble:    {' '.join(str(c) for c in xorriso_cmd)}")
@@ -280,10 +300,16 @@ def cmd_create(args: argparse.Namespace) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 1
 
+    if unpackfs_pseudo is not None:
+        unpackfs_conf_path.write_text(calamares.build_unpackfs_conf([layer.name for layer in plan.layers]))
+
     for layer in plan.layers:
         if exclude_files[layer.name] is not None:
             excludes.write_mksquashfs_exclude_file(layer.exclude_patterns, exclude_files[layer.name])
-        squashfs.build([layer.source], layer_dest[layer.name], exclude_files[layer.name], cfg.compression, cfg.compression_level)
+        squashfs.build(
+            [layer.source], layer_dest[layer.name], exclude_files[layer.name], cfg.compression, cfg.compression_level,
+            pseudo_files=unpackfs_pseudo if layer.name == "rootfs" else None,
+        )
         if cfg.encrypt and layer.name == "rootfs":
             luks.encrypt_squashfs(layer_dest[layer.name], layer_luks_dest[layer.name], passphrase)
 
