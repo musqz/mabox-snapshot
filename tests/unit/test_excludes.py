@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from types import SimpleNamespace
 
-from mabox_snapshot import excludes
+from mabox_snapshot import excludes, kernels
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -31,10 +31,14 @@ def test_shipped_default_parses_and_includes_curated_home_bloat_entries():
     assert len(patterns) > 0
     assert "home/*/.cache/mozilla/firefox/*/cache2/*" in patterns
     assert "home/*/.var/app/*/cache/*" in patterns
+    assert "home/*/.local/share/Steam/steamapps/common/*" in patterns
     # Curated, not a blanket wipe -- .cache and .var themselves must never
     # appear bare, only specific known-large subpaths within them.
     assert "home/*/.cache/*" not in patterns
     assert "home/*/.var/*" not in patterns
+    # Steam userdata/settings must never be swept up -- only the
+    # regenerable steamapps/ subpaths above.
+    assert not any(p.startswith("home/*/.local/share/Steam/userdata") for p in patterns)
 
 
 def test_parse_lines_skips_comments_and_blanks():
@@ -255,3 +259,57 @@ def test_resolve_excludes_deduplicates(tmp_path):
 
     result = excludes.resolve_excludes("preserving", exclude_list, fstab=fstab)
     assert result.count("dev/*") == 1
+
+
+def test_resolve_excludes_includes_compiled_override_rules(tmp_path):
+    exclude_list = tmp_path / "excludes.list"
+    exclude_list.write_text("")
+    fstab = tmp_path / "fstab"
+    fstab.write_text("")
+    override_rules = tmp_path / "overrides.list"
+    override_rules.write_text("exclude home/*/Documents\ninclude home/*/Documents/Custom_map\n")
+    (tmp_path / "home" / "alice" / "Documents" / "Custom_map").mkdir(parents=True)
+    (tmp_path / "home" / "alice" / "Documents" / "Other").mkdir(parents=True)
+
+    result = excludes.resolve_excludes(
+        "preserving", exclude_list, fstab=fstab, override_rules_path=override_rules, override_root=tmp_path
+    )
+
+    assert "home/alice/Documents/Other" in result
+    assert "home/alice/Documents/Custom_map" not in result
+
+
+def _kernel(name):
+    return kernels.KernelInfo(
+        name=name,
+        preset_path=Path(f"/etc/mkinitcpio.d/{name}.preset"),
+        vmlinuz=Path(f"/boot/vmlinuz-{name}"),
+        default_image=Path(f"/boot/initramfs-{name}.img"),
+    )
+
+
+def test_exclude_unselected_kernel_modules_trims_only_non_selected():
+    old, new = _kernel("linux612"), _kernel("linux618")
+    versions = {"linux612": "6.12.1-1-MANJARO", "linux618": "6.18.44-1-MANJARO"}
+
+    result = excludes.exclude_unselected_kernel_modules([old, new], [new], versions)
+
+    assert result == ["usr/lib/modules/6.12.1-1-MANJARO/*"]
+
+
+def test_exclude_unselected_kernel_modules_empty_when_all_selected():
+    old, new = _kernel("linux612"), _kernel("linux618")
+    versions = {"linux612": "6.12.1-1-MANJARO", "linux618": "6.18.44-1-MANJARO"}
+
+    result = excludes.exclude_unselected_kernel_modules([old, new], [old, new], versions)
+
+    assert result == []
+
+
+def test_exclude_unselected_kernel_modules_skips_kernel_missing_from_versions():
+    old, new = _kernel("linux612"), _kernel("linux618")
+    versions = {"linux618": "6.18.44-1-MANJARO"}  # old's version couldn't be resolved
+
+    result = excludes.exclude_unselected_kernel_modules([old, new], [new], versions)
+
+    assert result == []

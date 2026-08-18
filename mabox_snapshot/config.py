@@ -28,6 +28,7 @@ class SnapshotConfig:
     change_threshold_mb: int = 200
     encrypt: bool = False
     backup_destinations: tuple[str, ...] = ()
+    profile: str = "full"
 
 
 def _load_toml(path: Path) -> dict:

@@ -63,3 +63,13 @@ home/*/.recently-used.xbel
 # config,data} convention -- data/ and config/ (real app state, not
 # regenerable) are left untouched.
 home/*/.var/app/*/cache/*
+
+# Steam: installed games and their shader/download scratch space are
+# provably re-fetchable from Valve's CDN -- unlike Flatpak app data above,
+# this is safe as a universal default, not just an opt-in profile. Saves
+# and settings live elsewhere (Steam/userdata/, ~/.config/<game>), not
+# under steamapps/, so they're untouched.
+home/*/.local/share/Steam/steamapps/common/*
+home/*/.local/share/Steam/steamapps/shadercache/*
+home/*/.local/share/Steam/steamapps/downloading/*
+home/*/.local/share/Steam/steamapps/temp/*

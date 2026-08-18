@@ -10,7 +10,7 @@ from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
-from . import backup, calamares, changes, config, constants, excludes, grubcfg, history, isobuild, kernels, luks, overlay, packages, permissions, privilege, retention, squashfs
+from . import backup, calamares, changes, config, constants, excludes, grubcfg, history, isobuild, kernels, luks, overlay, packages, permissions, privilege, profiles, retention, skelaudit, squashfs
 from . import workdir as workdir_mod
 from . import __version__
 
@@ -88,6 +88,8 @@ def _apply_create_overrides(cfg: config.SnapshotConfig, args: argparse.Namespace
         overrides["encrypt"] = True
     if args.backup_to:
         overrides["backup_destinations"] = tuple(args.backup_to)
+    if args.profile is not None:
+        overrides["profile"] = args.profile
     return replace(cfg, **overrides)
 
 
@@ -117,13 +119,34 @@ def cmd_create(args: argparse.Namespace) -> int:
     else:
         selected = detected[-1:]  # newest-sorted preset by default; --kernel/--all-kernels overrides
 
+    # Resolved for every detected kernel, not just selected -- cheap (a few
+    # extra local pacman -Ql calls), and profiles.py's kernel-module
+    # trimming needs every non-selected kernel's version too. A resolution
+    # failure is only a hard error for a kernel this build actually needs;
+    # exclude_unselected_kernel_modules() defensively skips a kernel absent
+    # from kvers rather than erroring.
     kvers = {}
-    for k in selected:
+    for k in detected:
         kver = kernels.module_version(k)
-        if kver is None:
+        if kver is not None:
+            kvers[k.name] = kver
+    for k in selected:
+        if k.name not in kvers:
             print(f"error: could not resolve {k.name!r} to a /usr/lib/modules/<version> (pacman -Ql {k.name})", file=sys.stderr)
             return 1
-        kvers[k.name] = kver
+
+    try:
+        profile = profiles.resolve(cfg.profile)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    if profile.extra_excludes:
+        plan.layers[0].exclude_patterns.extend(profile.extra_excludes)
+    if profile.trim_unselected_kernel_modules:
+        plan.layers[0].exclude_patterns.extend(
+            excludes.exclude_unselected_kernel_modules(detected, selected, kvers)
+        )
+    plan.layers[0].exclude_patterns = list(dict.fromkeys(plan.layers[0].exclude_patterns))
 
     stamp = datetime.now().strftime("%Y-%m" if cfg.month else "%Y-%m-%d-%H%M")
     iso_name = args.iso_name or f"{constants.ISO_NAME_PREFIX}{args.mode}-{stamp}"
@@ -132,20 +155,18 @@ def cmd_create(args: argparse.Namespace) -> int:
     iso_root = cfg.workdir / "iso"
     mkinitcpio_conf = cfg.workdir / "mkinitcpio-miso.conf"
 
-    # Skipped for --encrypt: rootfs then ships as rootfs.sfs.luks, which
-    # Calamares' unpackfs can't unsquash directly (see build_unpackfs_conf's
-    # docstring) -- leaving the stock, also-broken config in place rather
-    # than fabricating an entry that just fails a different way.
+    # For --encrypt builds, build_unpackfs_conf() points the rootfs entry at
+    # the live session's already-decrypted mount instead of the on-media
+    # squashfs (see its docstring) -- always generated, never skipped.
     unpackfs_conf_path = cfg.workdir / "unpackfs.conf"
-    unpackfs_pseudo = None if cfg.encrypt else calamares.unpackfs_pseudo_specs(unpackfs_conf_path)
-    if unpackfs_pseudo is not None:
-        # Always the rootfs layer (plan.layers[0] in both modes, same as
-        # the "new_excludes" case further down): without this, a real
-        # file already sitting at that path (e.g. a hand-placed admin
-        # workaround for this very bug) would silently win over our
-        # pseudo-file -- verified empirically, mksquashfs just warns and
-        # keeps whatever's already in the source tree.
-        plan.layers[0].exclude_patterns.append(calamares.UNPACKFS_CONF_PATH)
+    unpackfs_pseudo = calamares.unpackfs_pseudo_specs(unpackfs_conf_path)
+    # Always the rootfs layer (plan.layers[0] in both modes, same as the
+    # "new_excludes" case further down): without this, a real file already
+    # sitting at that path (e.g. a hand-placed admin workaround for this
+    # very bug) would silently win over our pseudo-file -- verified
+    # empirically, mksquashfs just warns and keeps whatever's already in
+    # the source tree.
+    plan.layers[0].exclude_patterns.append(calamares.UNPACKFS_CONF_PATH)
 
     # Per-layer destinations (see overlay.py's module docstring for why
     # each layer is built by its own single-source mksquashfs invocation).
@@ -194,6 +215,7 @@ def cmd_create(args: argparse.Namespace) -> int:
     xorriso_cmd = isobuild.build_xorriso_command(iso_root, dest, constants.ISO_VOLID)
 
     print(f"mode:        {plan.mode}")
+    print(f"profile:     {profile.name}")
     for layer in plan.layers:
         print(f"source:      [{layer.name}] {layer.source} ({len(layer.exclude_patterns)} exclude pattern(s))")
     print(f"kernels:     {', '.join(f'{k.name} ({kvers[k.name]})' for k in selected)}")
@@ -214,7 +236,7 @@ def cmd_create(args: argparse.Namespace) -> int:
         note = f"{len(branding.slides)} slide(s) from {constants.IMAGES_DIR}" if branding else "none configured -- stock Manjaro branding"
         print(f"calamares:   {note}")
     if cfg.encrypt:
-        print("unpackfs:    skipped (--encrypt: Calamares install isn't supported for encrypted builds yet)")
+        print(f"unpackfs:    {', '.join(layer.name for layer in plan.layers)} -> {unpackfs_conf_path} (rootfs sourced from live decrypted mount, not on-media squashfs)")
     else:
         print(f"unpackfs:    {', '.join(layer.name for layer in plan.layers)} -> {unpackfs_conf_path}")
     print(f"bios boot:   {' '.join(str(c) for c in bios_cmd)}")
@@ -300,8 +322,9 @@ def cmd_create(args: argparse.Namespace) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 1
 
-    if unpackfs_pseudo is not None:
-        unpackfs_conf_path.write_text(calamares.build_unpackfs_conf([layer.name for layer in plan.layers]))
+    unpackfs_conf_path.write_text(
+        calamares.build_unpackfs_conf([layer.name for layer in plan.layers], encrypt=cfg.encrypt)
+    )
 
     for layer in plan.layers:
         if exclude_files[layer.name] is not None:
@@ -442,6 +465,58 @@ def cmd_excludes_folders(_args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_excludes_rules_list(args: argparse.Namespace) -> int:
+    rules = excludes.OverrideRuleList().load()
+    for orphan in excludes.find_orphan_includes(rules):
+        print(f"warning: 'include {orphan.pattern}' has no enclosing exclude rule -- no-op", file=sys.stderr)
+
+    if not args.compiled:
+        for rule in rules:
+            print(f"{rule.action} {rule.pattern}")
+        return 0
+
+    try:
+        compiled = excludes.compile_override_rules(rules)
+    except (ValueError, excludes.UnsupportedRuleNestingError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    if not compiled:
+        print("(no rules produce any exclude pattern on this host)", file=sys.stderr)
+    for pattern in compiled:
+        print(pattern)
+    return 0
+
+
+def cmd_excludes_rules_add(args: argparse.Namespace) -> int:
+    excludes.OverrideRuleList().add(args.action, args.pattern)
+    return 0
+
+
+def cmd_excludes_rules_remove(args: argparse.Namespace) -> int:
+    excludes.OverrideRuleList().remove(args.action, args.pattern)
+    return 0
+
+
+def cmd_excludes_rules_clear(_args: argparse.Namespace) -> int:
+    excludes.OverrideRuleList().clear()
+    return 0
+
+
+def cmd_excludes_rules_edit(_args: argparse.Namespace) -> int:
+    return excludes.OverrideRuleList().edit()
+
+
+def cmd_skel_audit(args: argparse.Namespace) -> int:
+    home = args.home or Path.home()
+    try:
+        report = skelaudit.audit_home_against_skel(home)
+    except FileNotFoundError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    print(skelaudit.format_report(report, show_identical=args.show_identical))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="mabox-snapshot")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -517,6 +592,11 @@ def build_parser() -> argparse.ArgumentParser:
     create_parser.add_argument("--change-threshold-mb", type=int, help="Prompt about home-dir items new/grown by at least this many MiB since the last snapshot (default 200)")
     create_parser.add_argument("--encrypt", action="store_true", help="Encrypt rootfs.sfs with LUKS2 (preserving mode only; passphrase prompted interactively at build time)")
     create_parser.add_argument("--backup-to", action="append", default=[], help="rsync the finished ISO here (local path or user@host:path); repeatable")
+    create_parser.add_argument(
+        "--profile", choices=list(profiles.PROFILES),
+        help="Size/completeness tier: full (default, today's behavior) or lean (trims unselected kernels' "
+             "module trees plus VM/container storage; see 'mabox-snapshot skel audit' to curate further)",
+    )
     create_parser.set_defaults(func=cmd_create)
 
     config_parser = sub.add_parser("config", help="Inspect or edit configuration")
@@ -541,6 +621,27 @@ def build_parser() -> argparse.ArgumentParser:
     remove_parser.add_argument("pattern", help="Exact pattern to remove, as printed by 'excludes list'")
     remove_parser.set_defaults(func=cmd_excludes_remove)
 
+    rules_parser = excludes_sub.add_parser(
+        "rules", help="Ordered include/exclude override rules (e.g. exclude a dir but keep one subpath inside it)"
+    )
+    rules_sub = rules_parser.add_subparsers(dest="rules_command", required=True)
+    rules_list_parser = rules_sub.add_parser("list", help="Print the current override rules")
+    rules_list_parser.add_argument(
+        "--compiled", action="store_true",
+        help="Print the flat mksquashfs exclude patterns these rules compile to on this host, instead of the raw rules",
+    )
+    rules_list_parser.set_defaults(func=cmd_excludes_rules_list)
+    rules_add_parser = rules_sub.add_parser("add", help="Add an override rule")
+    rules_add_parser.add_argument("action", choices=["exclude", "include"])
+    rules_add_parser.add_argument("pattern", help="Path relative to /, e.g. home/*/Documents; glob allowed on exclude rules only")
+    rules_add_parser.set_defaults(func=cmd_excludes_rules_add)
+    rules_remove_parser = rules_sub.add_parser("remove", help="Remove an override rule")
+    rules_remove_parser.add_argument("action", choices=["exclude", "include"])
+    rules_remove_parser.add_argument("pattern", help="Exact pattern to remove, as printed by 'excludes rules list'")
+    rules_remove_parser.set_defaults(func=cmd_excludes_rules_remove)
+    rules_sub.add_parser("clear", help="Remove all override rules").set_defaults(func=cmd_excludes_rules_clear)
+    rules_sub.add_parser("edit", help="Open the override-rules file in $EDITOR").set_defaults(func=cmd_excludes_rules_edit)
+
     packages_parser = sub.add_parser("packages", help="Inspect installed packages")
     packages_sub = packages_parser.add_subparsers(dest="packages_command", required=True)
     list_parser = packages_sub.add_parser("list", help="List packages, read-only, no root")
@@ -561,6 +662,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="--explicit, --aur, and --local combined",
     )
     list_parser.set_defaults(func=cmd_packages_list)
+
+    skel_parser = sub.add_parser("skel", help="Compare your desktop config against Mabox's shipped defaults")
+    skel_sub = skel_parser.add_subparsers(dest="skel_command", required=True)
+    audit_parser = skel_sub.add_parser(
+        "audit",
+        help="Report which of your desktop config files differ from mabox-skel's defaults",
+        description=(
+            "Reporting only -- nothing here changes what a snapshot captures. Diffs your home "
+            "directory against the vendored mabox-skel baseline to show what's untouched, what "
+            "you've customized, what you've deleted, and what's fully your own (not from Mabox). "
+            "Use the 'differs' list to decide what's worth protecting with "
+            "'excludes rules add include ...' in a leaner snapshot profile."
+        ),
+    )
+    audit_parser.add_argument("--home", type=Path, help="Home directory to audit (default: your own)")
+    audit_parser.add_argument("--show-identical", action="store_true", help="Also list untouched (identical-to-default) paths")
+    audit_parser.set_defaults(func=cmd_skel_audit)
 
     return parser
 

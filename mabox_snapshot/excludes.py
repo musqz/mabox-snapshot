@@ -7,9 +7,10 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 
-from . import constants
+from . import constants, kernels
 
 
 def _parse_lines(text: str) -> list[str]:
@@ -211,6 +212,8 @@ def resolve_excludes(
     extra_folders: tuple[str, ...] = (),
     home: Path | None = None,
     fstab: Path = constants.FSTAB_FILE,
+    override_rules_path: Path = constants.OVERRIDE_RULES_FILE,
+    override_root: Path = Path("/"),
 ) -> list[str]:
     """The full merged, deduplicated pattern list for one snapshot run."""
     patterns = list(ExcludeList(exclude_list_path).load())
@@ -218,6 +221,7 @@ def resolve_excludes(
     patterns += resolve_folder_excludes(extra_folders, home)
     if mode == "reset":
         patterns += constants.RESET_MODE_ONLY_EXCLUDES
+    patterns += compile_override_rules(OverrideRuleList(override_rules_path).load(), root=override_root)
 
     seen: set[str] = set()
     result = []
@@ -231,3 +235,239 @@ def resolve_excludes(
 def write_mksquashfs_exclude_file(patterns: list[str], dest: Path) -> Path:
     dest.write_text("\n".join(patterns) + "\n" if patterns else "")
     return dest
+
+
+def exclude_unselected_kernel_modules(
+    all_kernels: list[kernels.KernelInfo],
+    selected_kernels: list[kernels.KernelInfo],
+    module_versions: dict[str, str],
+) -> list[str]:
+    """usr/lib/modules/<version>/* for every installed kernel not selected
+    for this build -- 200-600MB per kernel that otherwise always rides
+    along in the rootfs squashfs regardless of --kernel/--all-kernels,
+    since only which vmlinuz/initramfs get copied to iso_root/boot is
+    controlled today, never which kernel module trees get excluded from
+    the live-'/' scan. Dynamic (depends on this run's kernel selection),
+    so unlike the rest of this module it can't be a static excludes.list
+    pattern -- see profiles.py's trim_unselected_kernel_modules."""
+    selected_names = {k.name for k in selected_kernels}
+    patterns = []
+    for kernel in all_kernels:
+        if kernel.name in selected_names:
+            continue
+        version = module_versions.get(kernel.name)
+        if version is None:
+            continue  # defensively skip rather than KeyError -- module_version() can fail
+        patterns.append(f"usr/lib/modules/{version}/*")
+    return patterns
+
+
+# ---------------------------------------------------------------------------
+# Ordered include/exclude override rules
+#
+# excludes.list above stays a flat, unordered, pure-exclude list -- it
+# already works and there's no need to retrofit a breaking format change
+# onto ~40 shipped default patterns. This is a separate, additive,
+# power-user file for the case that list structurally can't express:
+# "exclude this broad directory, but keep one specific subpath inside it".
+# mksquashfs's -ef exclude file has no include/negation semantics at all,
+# so these ordered rules are compiled down into a flat, mksquashfs-
+# compatible pattern set by compile_override_rules() before ever reaching
+# mksquashfs -- it never sees an "include" concept, only the expanded
+# result.
+# ---------------------------------------------------------------------------
+
+_RULE_ACTIONS = ("exclude", "include")
+
+# Characters mksquashfs's -wildcards mode treats as glob metacharacters --
+# same set _escape_glob() above already guards against for foreign-mount
+# labels; reused here since compile_override_rules() also turns real,
+# walked directory-entry names into concrete exclude patterns.
+_RULE_GLOB_METACHARS = _GLOB_METACHARS
+
+
+@dataclass(frozen=True)
+class OverrideRule:
+    action: str  # "exclude" | "include"
+    pattern: str  # relative to '/', mksquashfs-style glob allowed on the exclude side only
+
+
+class UnsupportedRuleNestingError(ValueError):
+    """An exclude rule falls under an already-protected include -- a second
+    level of exclude/include alternation, unsupported in v1: it would mean
+    silently deciding whose intent wins rather than compiling unambiguously."""
+
+
+def _parse_rule_lines(text: str) -> list[OverrideRule]:
+    rules = []
+    for lineno, raw_line in enumerate(text.splitlines(), start=1):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split(None, 1)
+        if len(parts) != 2 or parts[0] not in _RULE_ACTIONS:
+            raise ValueError(f"line {lineno}: expected 'exclude <path>' or 'include <path>', got: {raw_line!r}")
+        action, pattern = parts
+        rules.append(OverrideRule(action=action, pattern=pattern.strip()))
+    return rules
+
+
+def _format_rule_lines(rules: list[OverrideRule]) -> str:
+    return "\n".join(f"{r.action} {r.pattern}" for r in rules)
+
+
+class OverrideRuleList:
+    """Wraps the persisted, user-editable override-rule file. Same shape as
+    ExcludeList, no shipped default to reset to -- empty/absent by default."""
+
+    def __init__(self, path: Path = constants.OVERRIDE_RULES_FILE):
+        self.path = path
+
+    def load(self) -> list[OverrideRule]:
+        if not self.path.exists():
+            return []
+        return _parse_rule_lines(self.path.read_text())
+
+    def _save(self, rules: list[OverrideRule]) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_text(_format_rule_lines(rules) + "\n" if rules else "")
+
+    def add(self, action: str, pattern: str) -> None:
+        if action not in _RULE_ACTIONS:
+            raise ValueError(f"action must be 'exclude' or 'include', got: {action!r}")
+        rules = self.load()
+        rule = OverrideRule(action=action, pattern=pattern)
+        if rule not in rules:
+            rules.append(rule)
+            self._save(rules)
+
+    def remove(self, action: str, pattern: str) -> None:
+        self._save([r for r in self.load() if not (r.action == action and r.pattern == pattern)])
+
+    def clear(self) -> None:
+        self._save([])
+
+    def edit(self) -> int:
+        if not self.path.exists():
+            self._save([])
+        editor = os.environ.get("EDITOR", "nano")
+        return subprocess.call([editor, str(self.path)])
+
+
+def _walk_and_protect(base: Path, keep_tree: dict, root: Path) -> list[str]:
+    """Bounded ancestor-chain walk: only ever visits directories on the
+    path to a protected leaf, one iterdir() per level. keep_tree maps a
+    child name to its own subtree dict -- an empty subtree means that
+    child is the protected leaf itself (kept, never recursed into further);
+    a non-empty subtree means there are deeper protected paths below it."""
+    if not base.is_dir():
+        return []
+    try:
+        entries = list(base.iterdir())
+    except OSError:
+        return []
+
+    result: list[str] = []
+    for entry in entries:
+        subtree = keep_tree.get(entry.name)
+        if subtree is not None:
+            if subtree:
+                result.extend(_walk_and_protect(entry, subtree, root))
+            continue  # protected leaf (subtree == {}) or an interior node -- never excluded itself
+
+        try:
+            rel = entry.relative_to(root)
+        except ValueError:
+            continue
+        rel_text = _escape_glob(str(rel))
+        if "\n" in rel_text:
+            continue  # can't be represented as one line in a newline-delimited -ef file
+        result.append(rel_text)
+    return result
+
+
+def _pair_includes(rules: list[OverrideRule]) -> tuple[dict[OverrideRule, list[OverrideRule]], list[OverrideRule]]:
+    """Pairs each include with its nearest enclosing exclude (longest
+    matching ancestor pattern earlier in the effective rule set). Returns
+    (exclude -> paired includes, orphan includes with no enclosing
+    exclude at all)."""
+    exclude_rules = [r for r in rules if r.action == "exclude"]
+    include_rules = [r for r in rules if r.action == "include"]
+
+    groups: dict[OverrideRule, list[OverrideRule]] = {}
+    orphans: list[OverrideRule] = []
+    for include in include_rules:
+        candidates = [ex for ex in exclude_rules if include.pattern.startswith(ex.pattern + "/")]
+        if not candidates:
+            orphans.append(include)
+            continue
+        nearest = max(candidates, key=lambda ex: len(ex.pattern))
+        groups.setdefault(nearest, []).append(include)
+    return groups, orphans
+
+
+def find_orphan_includes(rules: list[OverrideRule]) -> list[OverrideRule]:
+    """Include rules with no enclosing exclude anywhere in the rule set --
+    a no-op, not an error, but worth surfacing to the user (see cli.py's
+    `excludes rules list`)."""
+    _, orphans = _pair_includes(rules)
+    return orphans
+
+
+def compile_override_rules(rules: list[OverrideRule], root: Path = Path("/")) -> list[str]:
+    """Expands ordered exclude/include rules into flat mksquashfs -ef
+    patterns. Each include pairs with its nearest enclosing exclude
+    (longest matching ancestor pattern); a bare include with no enclosing
+    exclude is a no-op (see find_orphan_includes() for surfacing that to
+    a user). An exclude with no paired include passes straight through
+    with no filesystem access, same cost as today. A paired
+    exclude+include is expanded via a bounded directory walk (see
+    _walk_and_protect) that visits only the ancestor chain down to the
+    protected leaf(ves), never the whole subtree. Raises
+    UnsupportedRuleNestingError if an exclude rule falls under an
+    already-protected include, or ValueError if an include's protected
+    suffix (the part past its enclosing exclude) contains a glob."""
+    exclude_rules = [r for r in rules if r.action == "exclude"]
+    groups, _orphans = _pair_includes(rules)
+
+    protected = [inc for incs in groups.values() for inc in incs]
+    for include in protected:
+        for exclude in exclude_rules:
+            if exclude.pattern.startswith(include.pattern + "/"):
+                raise UnsupportedRuleNestingError(
+                    f"'exclude {exclude.pattern}' falls under already-protected 'include {include.pattern}' -- "
+                    "a second level of exclude/include alternation isn't supported"
+                )
+
+    compiled: list[str] = []
+    for exclude in exclude_rules:
+        includes = groups.get(exclude)
+        if not includes:
+            compiled.append(exclude.pattern)
+            compiled.append(f"{exclude.pattern}/*")
+            continue
+
+        keep_tree: dict = {}
+        for include in includes:
+            suffix = include.pattern[len(exclude.pattern) + 1 :]
+            if not suffix or any(c in _RULE_GLOB_METACHARS for c in suffix):
+                raise ValueError(
+                    f"include '{include.pattern}' under exclude '{exclude.pattern}': protected suffix "
+                    "must be a non-empty literal path -- wildcards aren't supported there"
+                )
+            node = keep_tree
+            components = suffix.split("/")
+            for component in components[:-1]:
+                node = node.setdefault(component, {})
+            node.setdefault(components[-1], {})
+
+        for base in sorted(root.glob(exclude.pattern)):
+            compiled.extend(_walk_and_protect(base, keep_tree, root))
+
+    seen: set[str] = set()
+    result = []
+    for pattern in compiled:
+        if pattern not in seen:
+            seen.add(pattern)
+            result.append(pattern)
+    return result

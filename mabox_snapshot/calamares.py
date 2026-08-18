@@ -254,22 +254,45 @@ UNPACKFS_ENTRY_TEMPLATE = """    - source: "/run/miso/bootmnt/{basedir}/{arch}/{
       destination: ""
 """
 
+# --encrypt builds ship rootfs.sfs.luks instead of a plaintext rootfs.sfs --
+# unpackfs's plain sourcefs: "squashfs" can't decrypt LUKS, so it can't read
+# that file directly. But by the time Calamares runs, the live session has
+# already decrypted and mounted it (miso_luks's boot hook, for the live
+# session itself) at constants.MISO_LUKS_LIVE_ROOTFS_MOUNT -- an ordinary
+# mounted directory. Calamares' unpackfs module supports exactly this via
+# sourcefs: "file" (verified against the installed calamares package:
+# UnpackEntry.is_file() skips mounting entirely and rsyncs straight from
+# source), so point it at the already-decrypted live mount instead of
+# teaching Calamares to do LUKS decryption itself (which would mean
+# re-prompting for the passphrase inside the installer UI for no benefit
+# over reusing bytes that are already decrypted).
+UNPACKFS_FILE_ENTRY_TEMPLATE = """    - source: "{path}"
+      sourcefs: "file"
+      destination: ""
+"""
+
 
 def build_unpackfs_conf(
     layer_names: list[str],
     basedir: str = constants.MISO_BASEDIR,
     arch: str = constants.ISO_ARCH,
+    encrypt: bool = False,
 ) -> str:
     """One entry per squashfs layer this specific build actually produces
     (see overlay.py's BuildPlan -- ["rootfs"] in preserving mode,
-    ["rootfs", "desktopfs"] in reset mode), at the path the miso boot hook
-    mounts the ISO's boot medium at. Never called for --encrypt builds:
-    rootfs then ships as rootfs.sfs.luks, which unpackfs's plain
-    sourcefs: "squashfs" can't read directly (it isn't unsquashed until
-    the miso_luks boot hook decrypts it at boot time) -- Calamares install
-    isn't supported for encrypted builds yet."""
-    entries = "".join(UNPACKFS_ENTRY_TEMPLATE.format(basedir=basedir, arch=arch, name=name) for name in layer_names)
-    return f"unpack:\n{entries}"
+    ["rootfs", "desktopfs"] in reset mode). Normally each entry reads the
+    ISO's own on-media squashfs at the path the miso boot hook mounts the
+    boot medium at. For an --encrypt build (rootfs.sfs.luks, preserving
+    mode only), the "rootfs" entry instead reads the live session's
+    already-decrypted mount (see UNPACKFS_FILE_ENTRY_TEMPLATE) -- every
+    other layer name is unaffected."""
+    entries = []
+    for name in layer_names:
+        if encrypt and name == "rootfs":
+            entries.append(UNPACKFS_FILE_ENTRY_TEMPLATE.format(path=constants.MISO_LUKS_LIVE_ROOTFS_MOUNT))
+        else:
+            entries.append(UNPACKFS_ENTRY_TEMPLATE.format(basedir=basedir, arch=arch, name=name))
+    return f"unpack:\n{''.join(entries)}"
 
 
 def unpackfs_pseudo_specs(conf_path: Path) -> list[str]:

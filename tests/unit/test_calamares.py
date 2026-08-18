@@ -1,4 +1,7 @@
-from mabox_snapshot import calamares
+import re
+from pathlib import Path
+
+from mabox_snapshot import calamares, constants
 
 
 def test_load_branding_returns_none_when_no_slides(tmp_path):
@@ -89,6 +92,41 @@ def test_build_unpackfs_conf_one_entry_per_layer():
 def test_build_unpackfs_conf_reset_mode_lists_both_layers_in_order():
     conf = calamares.build_unpackfs_conf(["rootfs", "desktopfs"])
     assert conf.index("rootfs.sfs") < conf.index("desktopfs.sfs")
+
+
+def test_build_unpackfs_conf_encrypt_sources_rootfs_from_live_luks_mount():
+    conf = calamares.build_unpackfs_conf(["rootfs"], encrypt=True)
+    assert 'sourcefs: "file"' in conf
+    assert constants.MISO_LUKS_LIVE_ROOTFS_MOUNT in conf
+    assert 'sourcefs: "squashfs"' not in conf
+    assert "rootfs.sfs" not in conf  # not an on-media squashfs reference
+
+
+def test_build_unpackfs_conf_encrypt_false_is_unaffected():
+    conf = calamares.build_unpackfs_conf(["rootfs"], encrypt=False)
+    assert 'sourcefs: "squashfs"' in conf
+    assert constants.MISO_LUKS_LIVE_ROOTFS_MOUNT not in conf
+
+
+def test_build_unpackfs_conf_encrypt_only_affects_rootfs_layer():
+    conf = calamares.build_unpackfs_conf(["rootfs", "desktopfs"], encrypt=True)
+    assert conf.count('sourcefs: "file"') == 1
+    assert conf.count('sourcefs: "squashfs"') == 1
+    assert "desktopfs.sfs" in conf
+
+
+def test_miso_luks_hook_mounts_at_the_constant_path():
+    # Regression tripwire: miso_luks builds the mount path from two shell
+    # vars ("${dest_sfs}/${sfs}"), not a literal string, so this can't just
+    # grep for the constant -- it checks the two pieces that combine to it
+    # instead, so the Python constant and the shell hook can't silently
+    # drift apart.
+    hook_text = Path(__file__).parents[2].joinpath("configs/initcpio/hooks/miso_luks").read_text()
+    dest_sfs, _, sfs_name = constants.MISO_LUKS_LIVE_ROOTFS_MOUNT.rpartition("/")
+    assert f'dest_sfs="{dest_sfs}"' in hook_text
+    assert '"${dest_sfs}/${sfs}"' in hook_text
+    loop_line = next(line for line in hook_text.splitlines() if line.strip().startswith("for sfs in "))
+    assert re.search(rf"\b{re.escape(sfs_name)}\b", loop_line)
 
 
 def test_unpackfs_pseudo_specs_declares_parent_dirs_before_the_file():

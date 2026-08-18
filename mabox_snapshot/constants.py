@@ -11,6 +11,13 @@ USER_CONFIG_FILE = Path("~/.config/mabox-snapshot/mabox-snapshot.conf").expandus
 EXCLUDES_LIST_FILE = Path("/etc/mabox-snapshot/excludes.list")
 EXCLUDES_LIST_DEFAULT = Path("/usr/share/mabox-snapshot/excludes.list.default")
 
+# Separate, additive, power-user file for ordered include/exclude override
+# rules (see excludes.py's OverrideRuleList/compile_override_rules) -- kept
+# apart from EXCLUDES_LIST_FILE's flat, unordered, pure-exclude patterns
+# rather than retrofitting a breaking format change onto it. Empty/absent
+# by default, no shipped default to reset to.
+OVERRIDE_RULES_FILE = Path("/etc/mabox-snapshot/overrides.list")
+
 NAMED_FOLDERS = ["Desktop", "Documents", "Downloads", "Music", "Pictures", "Videos", "Public", "Templates"]
 
 # Shared by cli.py's default --iso-name and retention.py's prune glob, so the
@@ -129,6 +136,18 @@ LUKS_CONTAINER_SUFFIX = ".luks"
 # open. The two never share a process, so this constant is a single
 # source of truth to keep the shell copy in sync with, not a runtime link.
 ISO_LUKS_MAPPER_NAME = "mabox_rootfs"
+
+# Where miso_luks's _mnt_luks_sfs() mounts the decrypted rootfs during LIVE
+# BOOT (miso_mount_handler()'s dest_sfs="/run/miso/sfs" + the "rootfs" loop
+# var) -- the only plaintext copy of an --encrypt build's rootfs that ever
+# exists, since luks.py deletes the workdir plaintext immediately after
+# encrypting and the ISO tree only ever ships the .sfs.luks container. It's
+# guaranteed mounted for the whole live session (one of the live root's own
+# overlayfs lowerdirs), so Calamares' unpackfs module can read it directly
+# via a "file" sourcefs entry instead of trying to decrypt the .luks
+# container itself. Same manual-sync-with-shell precedent as
+# ISO_LUKS_MAPPER_NAME above -- keep in sync by hand if either changes.
+MISO_LUKS_LIVE_ROOTFS_MOUNT = "/run/miso/sfs/rootfs"
 
 # User-editable branding source, same convention as EXCLUDES_LIST_FILE
 # (plain directory under /etc/mabox-snapshot, no separate per-user split).

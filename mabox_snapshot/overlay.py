@@ -62,11 +62,19 @@ def resolve_plan(
     exclude_folders: tuple[str, ...] = (),
     output_dir: Path | None = None,
     mounts_file: Path | None = None,
+    override_rules_path: Path | None = None,
+    override_root: Path | None = None,
 ) -> BuildPlan:
     if mode not in ("preserving", "reset"):
         raise ValueError(f"unknown mode: {mode!r}")
 
-    patterns = excludes.resolve_excludes(mode, exclude_list_path, exclude_folders)
+    patterns = excludes.resolve_excludes(
+        mode,
+        exclude_list_path,
+        exclude_folders,
+        override_rules_path=override_rules_path or constants.OVERRIDE_RULES_FILE,
+        override_root=override_root or Path("/"),
+    )
     patterns += _self_exclude_patterns(workdir, output_dir or workdir)
     patterns += excludes.detect_foreign_mount_excludes(mounts=mounts_file or constants.MOUNTS_FILE)
     patterns = list(dict.fromkeys(patterns))  # dedup across the three sources above, keep order
