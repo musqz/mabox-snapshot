@@ -22,6 +22,17 @@ etc/adjtime
 etc/ssh/ssh_host_*
 etc/X11/xorg.conf*
 
+# The source machine's own EFI System Partition content -- confirmed via a
+# real --encrypt install: unpackfs was copying the *build host's own*
+# working /boot/efi/EFI/<id>/ and /boot/efi/EFI/boot/ (UEFI fallback path)
+# onto the target's freshly-formatted ESP before Calamares' own bootloader
+# job ever ran. Every install needs its own fresh bootloader written by
+# Calamares' grub-install/efibootmgr, never a copy of the ORIGINAL
+# machine's -- a stale foreign EFI binary there can end up being what
+# firmware actually boots, one still pointing at the source machine's own
+# partition UUIDs instead of the target's.
+boot/efi/*
+
 # Package manager state and cache
 var/cache/pacman/pkg/*
 var/lib/pacman/sync/*
