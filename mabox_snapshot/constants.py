@@ -115,6 +115,14 @@ ISO_ARCH = "x86_64"
 
 GRUB_LIB_DIR = Path("/usr/lib/grub")
 
+# GRUB's own bundled font, shipped by the grub package itself (confirmed:
+# `pacman -Qo` on this host resolves it to package grub, not something
+# ad-hoc) -- without an explicit loadfont, gfxterm falls back to whatever
+# minimal font is built into the boot image, which lacks glyphs for the
+# Unicode box-drawing characters GRUB's own default bordered-menu style
+# uses, rendering as placeholder boxes instead of a clean border.
+GRUB_UNICODE_FONT = Path("/usr/share/grub/unicode.pf2")
+
 # Verified at /usr/share/manjaro-tools/mkinitcpio.conf (manjaro-tools-iso-git
 # package) -- the exact HOOKS/MODULES a live ISO's initramfs needs for the
 # miso boot hook to run.

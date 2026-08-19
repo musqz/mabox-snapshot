@@ -29,6 +29,18 @@ def test_build_grub_cfg_includes_background_when_splash_present():
     assert "background_image /boot/grub/splash.png" in cfg
 
 
+def test_build_grub_cfg_loads_a_unicode_font_before_gfxterm_output():
+    """Without this, gfxterm's default bordered-menu style falls back to a
+    minimal font lacking glyphs for its own Unicode box-drawing characters,
+    rendering as placeholder boxes instead of a clean border -- confirmed
+    on a real boot."""
+    cfg = grubcfg.build_grub_cfg(["linux618"])
+    lines = cfg.splitlines()
+    assert "insmod font" in lines
+    assert "loadfont /boot/grub/unicode.pf2" in lines
+    assert lines.index("loadfont /boot/grub/unicode.pf2") < lines.index("terminal_output gfxterm")
+
+
 def test_build_splash_command_uses_magick_not_convert():
     cmd = grubcfg.build_splash_command(Path("/src/wallpaper.jpg"), Path("/dst/splash.png"), "#175B8E")
     assert cmd[0] == "magick"
