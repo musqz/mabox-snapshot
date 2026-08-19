@@ -299,6 +299,42 @@ def test_detect_foreign_mount_excludes_missing_mounts_file(tmp_path):
     assert excludes.detect_foreign_mount_excludes(mounts=tmp_path / "nope") == []
 
 
+def test_detect_foreign_mount_excludes_excludes_pseudo_fs_nested_under_allowed_path(tmp_path):
+    """Regression guard for a real snapshot build: PIA VPN mounts its own
+    cgroup v1 net_cls controller at /opt/piavpn/etc/cgroup/net_cls -- nested
+    under /opt, which is otherwise a fully allowed real-partition path. The
+    allowed check only ever looks at the mountpoint's path, so without a
+    fstype check this cgroup mount was squashed as if it were real data."""
+    root = tmp_path / "root"
+    root.mkdir()
+    cgroup_mount = root / "opt" / "piavpn" / "etc" / "cgroup" / "net_cls"
+    mounts = tmp_path / "mounts"
+    mounts.write_text(f"none {cgroup_mount} cgroup rw,relatime,net_cls 0 0\n")
+
+    result = excludes.detect_foreign_mount_excludes(root=root, allowed=(root / "opt",), mounts=mounts)
+
+    assert result == ["opt/piavpn/etc/cgroup/net_cls/*"]
+
+
+def test_detect_foreign_mount_excludes_pseudo_fs_skips_device_check(tmp_path, monkeypatch):
+    """A pseudo filesystem is excluded purely by fstype -- it must not
+    fall through to the same-device check, which pseudo filesystems don't
+    meaningfully participate in (they're not backed by root's own block
+    device, so st_dev would rarely match by coincidence, but the check is
+    irrelevant here regardless)."""
+    root = tmp_path / "root"
+    root.mkdir()
+    proc_mount = root / "opt" / "proc"
+    mounts = tmp_path / "mounts"
+    mounts.write_text(f"none {proc_mount} proc rw 0 0\n")
+    devs = {str(root): 1, str(proc_mount): 1}  # same device -- would normally mean "not foreign"
+    monkeypatch.setattr(excludes.os, "stat", _fake_stat(devs))
+
+    result = excludes.detect_foreign_mount_excludes(root=root, allowed=(root / "opt",), mounts=mounts)
+
+    assert result == ["opt/proc/*"]
+
+
 def test_resolve_excludes_adds_reset_mode_only_patterns(tmp_path):
     exclude_list = tmp_path / "excludes.list"
     exclude_list.write_text("dev/*\n")

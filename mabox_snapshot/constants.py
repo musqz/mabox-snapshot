@@ -58,6 +58,24 @@ ALLOWED_ROOTFS_MOUNTS = (
     Path("/opt"), Path("/srv"), Path("/root"),
 )
 
+# Kernel-provided virtual filesystems -- never real persistent data, no
+# matter where an application chooses to mount one. Matched by fstype
+# instead of mountpoint, so it's caught even when nested under an
+# otherwise-allowed path -- confirmed against a real snapshot build: PIA
+# VPN mounts its own cgroup v1 net_cls controller at
+# /opt/piavpn/etc/cgroup/net_cls, which slipped past
+# ALLOWED_ROOTFS_MOUNTS's is_relative_to(/opt) check entirely (that check
+# only cares about the mountpoint's path, not what's actually mounted
+# there) and got squashed as if it were real data -- mksquashfs couldn't
+# even read several of its control files ("Failed to read file
+# .../cgroup.procs, creating empty file"), since cgroupfs entries aren't
+# regular readable files at all.
+PSEUDO_FILESYSTEM_TYPES = frozenset({
+    "proc", "sysfs", "cgroup", "cgroup2", "devpts", "devtmpfs", "mqueue",
+    "pstore", "securityfs", "debugfs", "tracefs", "configfs", "fusectl",
+    "binfmt_misc", "rpc_pipefs", "nsfs", "autofs",
+})
+
 # Reset-mode-only: excluded from the rootfs layer outright, then replaced
 # with sanitized versions from the overlay layer (see sanitize.py) --
 # excluded here too, not just overridden, so the real password hashes are

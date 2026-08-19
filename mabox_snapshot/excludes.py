@@ -194,6 +194,7 @@ def detect_foreign_mount_excludes(
     root: Path = Path("/"),
     allowed: tuple[Path, ...] = constants.ALLOWED_ROOTFS_MOUNTS,
     mounts: Path = constants.MOUNTS_FILE,
+    pseudo_types: frozenset[str] = constants.PSEUDO_FILESYSTEM_TYPES,
 ) -> list[str]:
     """Any filesystem mounted under root other than root itself is either a
     real system partition worth capturing (allowed: /boot, /home, and
@@ -210,7 +211,15 @@ def detect_foreign_mount_excludes(
     a common Arch/Manjaro setup: each subvolume gets its own /proc/mounts
     entry with its own mountpoint but shares the root filesystem's device,
     so it's correctly treated as part of the same filesystem, not foreign
-    storage, with no need to allowlist every subvolume by name."""
+    storage, with no need to allowlist every subvolume by name.
+
+    A pseudo_types match (see constants.PSEUDO_FILESYSTEM_TYPES) always
+    excludes, bypassing the 'allowed' check entirely -- confirmed against
+    a real snapshot build: PIA VPN's own cgroup v1 net_cls controller,
+    mounted at /opt/piavpn/etc/cgroup/net_cls, was treated as part of the
+    allowed /opt tree (allowed only ever checks the mountpoint's path, not
+    what's actually mounted there) and got squashed as if it were real
+    data -- mksquashfs couldn't even read several of its control files."""
     if not mounts.exists():
         return []
 
@@ -225,22 +234,25 @@ def detect_foreign_mount_excludes(
     seen: set[str] = set()
     for line in mounts.read_text(errors="replace").splitlines():
         fields = line.split()
-        if len(fields) < 2:
+        if len(fields) < 3:
             continue
         mountpoint = Path(_unescape_mounts_field(fields[1]))
+        fstype = fields[2]
         if mountpoint == root:
             continue
-        if any(mountpoint.is_relative_to(a) for a in allowed):
+        is_pseudo = fstype in pseudo_types
+        if not is_pseudo and any(mountpoint.is_relative_to(a) for a in allowed):
             continue
         try:
             rel = mountpoint.relative_to(root)
         except ValueError:
             continue  # not under root at all
-        try:
-            if os.stat(mountpoint).st_dev == root_dev:
-                continue  # same filesystem (e.g. a Btrfs subvolume), not foreign storage
-        except OSError:
-            pass  # can't verify -- fall through and exclude it to be safe
+        if not is_pseudo:
+            try:
+                if os.stat(mountpoint).st_dev == root_dev:
+                    continue  # same filesystem (e.g. a Btrfs subvolume), not foreign storage
+            except OSError:
+                pass  # can't verify -- fall through and exclude it to be safe
         rel_text = _escape_glob(str(rel))
         if "\n" in rel_text:
             continue  # can't be represented as one line in a newline-delimited -ef file
