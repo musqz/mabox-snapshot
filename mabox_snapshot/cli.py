@@ -181,6 +181,7 @@ def cmd_create(args: argparse.Namespace) -> int:
     services_override_path = cfg.workdir / "services-override.conf"
     settings_conf_path = cfg.workdir / "settings-encrypt.conf" if cfg.encrypt else None
     shellprocess_conf_path = cfg.workdir / "shellprocess-remount.conf" if cfg.encrypt else None
+    shellprocess_cleanup_conf_path = cfg.workdir / "shellprocess-cleanup.conf" if cfg.encrypt else None
     unpackfs_pseudo = calamares.unpackfs_pseudo_specs(
         unpackfs_conf_path,
         initcpio_override_path,
@@ -188,6 +189,7 @@ def cmd_create(args: argparse.Namespace) -> int:
         encrypt=cfg.encrypt,
         settings_conf_path=settings_conf_path,
         shellprocess_conf_path=shellprocess_conf_path,
+        shellprocess_cleanup_conf_path=shellprocess_cleanup_conf_path,
     )
     # Always the rootfs layer (plan.layers[0] in both modes, same as the
     # "new_excludes" case further down): without this, a real file already
@@ -200,6 +202,7 @@ def cmd_create(args: argparse.Namespace) -> int:
     if cfg.encrypt:
         plan.layers[0].exclude_patterns.append(calamares.SETTINGS_CONF_TARGET_PATH)
         plan.layers[0].exclude_patterns.append(calamares.SHELLPROCESS_CONF_TARGET_PATH)
+        plan.layers[0].exclude_patterns.append(calamares.SHELLPROCESS_CLEANUP_CONF_TARGET_PATH)
 
     # Per-layer destinations (see overlay.py's module docstring for why
     # each layer is built by its own single-source mksquashfs invocation).
@@ -276,7 +279,7 @@ def cmd_create(args: argparse.Namespace) -> int:
         note = f"{len(branding.slides)} slide(s) from {constants.IMAGES_DIR}" if branding else "none configured -- stock Manjaro branding"
         print(f"calamares:   {note}")
     if cfg.encrypt:
-        print(f"unpackfs:    {', '.join(layer.name for layer in plan.layers)} -> {unpackfs_conf_path} (rootfs sourced from live decrypted mount, remounted by an injected Calamares job right before unpackfs runs)")
+        print(f"unpackfs:    {', '.join(layer.name for layer in plan.layers)} -> {unpackfs_conf_path} (rootfs sourced from live decrypted mount, remounted by an injected Calamares job right before unpackfs runs and closed again right after)")
     else:
         print(f"unpackfs:    {', '.join(layer.name for layer in plan.layers)} -> {unpackfs_conf_path}")
     print(f"bios boot:   {' '.join(str(c) for c in bios_cmd)}")
@@ -387,6 +390,7 @@ def cmd_create(args: argparse.Namespace) -> int:
             calamares.insert_live_source_job(constants.CALAMARES_SETTINGS_FILE.read_text())
         )
         shellprocess_conf_path.write_text(calamares.build_shellprocess_remount_conf())
+        shellprocess_cleanup_conf_path.write_text(calamares.build_shellprocess_cleanup_conf())
 
     for layer in plan.layers:
         if exclude_files[layer.name] is not None:

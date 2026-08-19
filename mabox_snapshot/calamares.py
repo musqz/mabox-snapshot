@@ -379,33 +379,79 @@ def build_shellprocess_remount_conf(
     return SHELLPROCESS_REMOUNT_CONF_TEMPLATE.format(mount_point=mount_point, mapper_name=mapper_name)
 
 
+# Second named instance, same module@instanceId convention as the remount
+# job above -- undoes it once unpackfs is done reading, instead of leaving
+# /dev/mapper/{mapper_name} open for the rest of the exec sequence. Every
+# later chroot-based job (grubcfg, bootloader, ...) runs with the live
+# environment's /dev bind-mounted in, so an unrelated crypto device left
+# open the whole time stays visible to grub-install/efibootmgr's own
+# device enumeration inside the chroot -- a plausible explanation for a
+# real, confirmed symptom: an --encrypt install that completed without
+# error still produced no "Manjaro" UEFI boot entry at all, where the
+# equivalent non-encrypt install did.
+SHELLPROCESS_CLEANUP_INSTANCE_ID = "mabox-close-live-source"
+SHELLPROCESS_CLEANUP_INSTANCE = f"shellprocess@{SHELLPROCESS_CLEANUP_INSTANCE_ID}"
+SHELLPROCESS_CLEANUP_CONF_TARGET_PATH = f"etc/calamares/modules/{SHELLPROCESS_CLEANUP_INSTANCE}.conf"
+
+SHELLPROCESS_CLEANUP_CONF_TEMPLATE = """---
+i18n:
+    name: "Releasing decrypted rootfs..."
+
+dontChroot: true
+timeout: 30
+script:
+    - "-umount {mount_point}"
+    - "-cryptsetup close {mapper_name}"
+"""
+
+
+def build_shellprocess_cleanup_conf(
+    mount_point: str = constants.MISO_LUKS_LIVE_ROOTFS_MOUNT,
+    mapper_name: str = constants.ISO_LUKS_MAPPER_NAME,
+) -> str:
+    """Both commands are '-'-prefixed (best-effort, per shellprocess's own
+    convention) -- this is cleanup after a successful unpack, not core
+    functionality, and a merely-imperfect close (e.g. something
+    unexpected still referencing it) shouldn't abort an otherwise-working
+    install the way a failed remount rightly does."""
+    return SHELLPROCESS_CLEANUP_CONF_TEMPLATE.format(mount_point=mount_point, mapper_name=mapper_name)
+
+
 def insert_live_source_job(settings_text: str) -> str:
     """Inserts SHELLPROCESS_INSTANCE immediately before the '- unpackfs'
-    line in settings.conf's exec sequence, preserving its exact
-    indentation, AND declares it in a top-level 'instances:' block --
-    confirmed via a real install this was the actual missing piece the
-    whole time: a bare `module@id` reference in the exec sequence does
-    not by itself register a module instance with Calamares (verified
-    against a real install: the sequence entry landed correctly, the
-    module's own .conf file was present and well-formed, and the job
-    still never ran -- no /run/mabox-snapshot directory was ever
-    created, not even the empty one 'mkdir -p' would leave behind on a
-    mount failure). Confirmed by re-checking the reference config this
-    mechanism was modeled on, ~/Github/penguins-eggs's own
-    settings.conf: it declares an explicit 'instances:' entry (id/
-    module/config) for each of its own named shellprocess jobs -- that
-    block is what actually tells Calamares an instance exists at all;
-    the exec sequence entry only orders it relative to other jobs.
-    Raises ValueError if the '- unpackfs' anchor or the top-level
-    'sequence:' key isn't found -- fail loudly if Calamares' upstream
-    settings.conf format ever changes unexpectedly, rather than silently
-    produce a settings.conf that never runs the remount job at all."""
+    line in settings.conf's exec sequence, and SHELLPROCESS_CLEANUP_INSTANCE
+    immediately after it, preserving indentation -- remount right before
+    the read, close right after, no gap either side. Both get declared in
+    a top-level 'instances:' block -- confirmed via a real install this
+    was the actual missing piece the whole time: a bare `module@id`
+    reference in the exec sequence does not by itself register a module
+    instance with Calamares (verified against a real install: the
+    sequence entry landed correctly, the module's own .conf file was
+    present and well-formed, and the job still never ran -- no
+    /run/mabox-snapshot directory was ever created, not even the empty
+    one 'mkdir -p' would leave behind on a mount failure). Confirmed by
+    re-checking the reference config this mechanism was modeled on,
+    ~/Github/penguins-eggs's own settings.conf: it declares an explicit
+    'instances:' entry (id/module/config) for each of its own named
+    shellprocess jobs -- that block is what actually tells Calamares an
+    instance exists at all; the exec sequence entry only orders it
+    relative to other jobs. Raises ValueError if the '- unpackfs' anchor
+    or the top-level 'sequence:' key isn't found -- fail loudly if
+    Calamares' upstream settings.conf format ever changes unexpectedly,
+    rather than silently produce a settings.conf that never runs these
+    jobs at all."""
     match = re.search(r"(?m)^([ \t]*)- unpackfs[ \t]*$", settings_text)
     if match is None:
         raise ValueError("settings.conf has no '- unpackfs' line in its exec sequence -- can't insert the remount job")
     indent = match.group(1)
-    insertion = f"{indent}- {SHELLPROCESS_INSTANCE}\n"
-    text = settings_text[: match.start()] + insertion + settings_text[match.start() :]
+    line_end = match.end() + 1  # past '- unpackfs''s own trailing newline
+    text = (
+        settings_text[: match.start()]
+        + f"{indent}- {SHELLPROCESS_INSTANCE}\n"
+        + settings_text[match.start() : line_end]
+        + f"{indent}- {SHELLPROCESS_CLEANUP_INSTANCE}\n"
+        + settings_text[line_end:]
+    )
 
     sequence_match = re.search(r"(?m)^sequence:[ \t]*$", text)
     if sequence_match is None:
@@ -415,6 +461,9 @@ def insert_live_source_job(settings_text: str) -> str:
         f"  - id: {SHELLPROCESS_INSTANCE_ID}\n"
         "    module: shellprocess\n"
         f"    config: {SHELLPROCESS_INSTANCE}.conf\n\n"
+        f"  - id: {SHELLPROCESS_CLEANUP_INSTANCE_ID}\n"
+        "    module: shellprocess\n"
+        f"    config: {SHELLPROCESS_CLEANUP_INSTANCE}.conf\n\n"
     )
     return text[: sequence_match.start()] + instances_block + text[sequence_match.start() :]
 
@@ -503,6 +552,7 @@ def unpackfs_pseudo_specs(
     encrypt: bool = False,
     settings_conf_path: Path | None = None,
     shellprocess_conf_path: Path | None = None,
+    shellprocess_cleanup_conf_path: Path | None = None,
 ) -> list[str]:
     """mksquashfs -p specs injecting conf_path's contents (written by the
     caller from build_unpackfs_conf()) at UNPACKFS_CONF_PATH,
@@ -522,17 +572,19 @@ def unpackfs_pseudo_specs(
     mksquashfs silently keeps it over the pseudo-file instead.
 
     encrypt=True additionally injects a modified settings.conf (with the
-    remount job spliced into its exec sequence, see
-    insert_live_source_job()) and the remount job's own module config
-    (see build_shellprocess_remount_conf()) -- reusing the same two
-    pseudo-dirs above, since both new files live under them too. Callers
-    must pass settings_conf_path/shellprocess_conf_path (and exclude both
-    their target paths from the layer's own source scan, same reasoning
-    as UNPACKFS_CONF_PATH) whenever encrypt=True. There's no permanent,
-    on-disk file to generate these from: preserving mode has no overlay
-    step to write into (that's reset-mode only), and writing straight to
-    the *build host's own* /etc/calamares would mean permanently altering
-    the machine's real installer config just to build a snapshot."""
+    remount and cleanup jobs spliced into its exec sequence, see
+    insert_live_source_job()) and both jobs' own module configs (see
+    build_shellprocess_remount_conf()/build_shellprocess_cleanup_conf())
+    -- reusing the same two pseudo-dirs above, since all these files live
+    under them too. Callers must pass settings_conf_path/
+    shellprocess_conf_path/shellprocess_cleanup_conf_path (and exclude
+    all three target paths from the layer's own source scan, same
+    reasoning as UNPACKFS_CONF_PATH) whenever encrypt=True. There's no
+    permanent, on-disk file to generate these from: preserving mode has
+    no overlay step to write into (that's reset-mode only), and writing
+    straight to the *build host's own* /etc/calamares would mean
+    permanently altering the machine's real installer config just to
+    build a snapshot."""
     specs = [
         "etc/calamares d 755 0 0",
         "etc/calamares/modules d 755 0 0",
@@ -543,4 +595,7 @@ def unpackfs_pseudo_specs(
     if encrypt:
         specs.append(f"{SETTINGS_CONF_TARGET_PATH} f 644 0 0 cat {shlex.quote(str(settings_conf_path))}")
         specs.append(f"{SHELLPROCESS_CONF_TARGET_PATH} f 644 0 0 cat {shlex.quote(str(shellprocess_conf_path))}")
+        specs.append(
+            f"{SHELLPROCESS_CLEANUP_CONF_TARGET_PATH} f 644 0 0 cat {shlex.quote(str(shellprocess_cleanup_conf_path))}"
+        )
     return specs

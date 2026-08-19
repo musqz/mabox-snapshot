@@ -159,6 +159,19 @@ def test_build_shellprocess_remount_conf_defaults_match_constants():
     assert constants.ISO_LUKS_MAPPER_NAME in conf
 
 
+def test_build_shellprocess_cleanup_conf_contains_mount_point_and_mapper():
+    conf = calamares.build_shellprocess_cleanup_conf(mount_point="/run/mabox-snapshot/live-source", mapper_name="mabox_rootfs")
+    assert "dontChroot: true" in conf
+    assert "-umount /run/mabox-snapshot/live-source" in conf
+    assert "-cryptsetup close mabox_rootfs" in conf
+
+
+def test_build_shellprocess_cleanup_conf_defaults_match_constants():
+    conf = calamares.build_shellprocess_cleanup_conf()
+    assert constants.MISO_LUKS_LIVE_ROOTFS_MOUNT in conf
+    assert constants.ISO_LUKS_MAPPER_NAME in conf
+
+
 def test_insert_live_source_job_inserts_before_unpackfs_preserving_indent():
     settings = "sequence:\n- exec:\n  - partition\n  - mount\n  - unpackfs\n  - machineid\n"
     result = calamares.insert_live_source_job(settings)
@@ -166,6 +179,15 @@ def test_insert_live_source_job_inserts_before_unpackfs_preserving_indent():
     assert f"  - {calamares.SHELLPROCESS_INSTANCE}" in lines
     unpackfs_index = lines.index("  - unpackfs")
     assert lines[unpackfs_index - 1] == f"  - {calamares.SHELLPROCESS_INSTANCE}"
+
+
+def test_insert_live_source_job_inserts_cleanup_job_after_unpackfs_preserving_indent():
+    settings = "sequence:\n- exec:\n  - partition\n  - mount\n  - unpackfs\n  - machineid\n"
+    result = calamares.insert_live_source_job(settings)
+    lines = result.splitlines()
+    assert f"  - {calamares.SHELLPROCESS_CLEANUP_INSTANCE}" in lines
+    unpackfs_index = lines.index("  - unpackfs")
+    assert lines[unpackfs_index + 1] == f"  - {calamares.SHELLPROCESS_CLEANUP_INSTANCE}"
 
 
 def test_insert_live_source_job_raises_when_unpackfs_missing():
@@ -183,6 +205,15 @@ def test_insert_live_source_job_declares_shellprocess_instance():
     assert f"    config: {calamares.SHELLPROCESS_INSTANCE}.conf" in lines
     # the instances: block must come before sequence: (top-level keys),
     # not get spliced into the middle of the exec list
+    assert lines.index("instances:") < lines.index("sequence:")
+
+
+def test_insert_live_source_job_declares_cleanup_shellprocess_instance():
+    settings = "sequence:\n- exec:\n  - partition\n  - mount\n  - unpackfs\n  - machineid\n"
+    result = calamares.insert_live_source_job(settings)
+    lines = result.splitlines()
+    assert f"  - id: {calamares.SHELLPROCESS_CLEANUP_INSTANCE_ID}" in lines
+    assert f"    config: {calamares.SHELLPROCESS_CLEANUP_INSTANCE}.conf" in lines
     assert lines.index("instances:") < lines.index("sequence:")
 
 
@@ -234,12 +265,15 @@ def test_unpackfs_pseudo_specs_encrypt_true_injects_settings_and_shellprocess():
         encrypt=True,
         settings_conf_path="/work/settings-encrypt.conf",
         shellprocess_conf_path="/work/shellprocess-remount.conf",
+        shellprocess_cleanup_conf_path="/work/shellprocess-cleanup.conf",
     )
-    assert len(specs) == 7
+    assert len(specs) == 8
     settings_spec = next(s for s in specs if s.startswith(calamares.SETTINGS_CONF_TARGET_PATH))
     assert settings_spec.endswith("/work/settings-encrypt.conf")
     shellprocess_spec = next(s for s in specs if s.startswith(calamares.SHELLPROCESS_CONF_TARGET_PATH))
     assert shellprocess_spec.endswith("/work/shellprocess-remount.conf")
+    cleanup_spec = next(s for s in specs if s.startswith(calamares.SHELLPROCESS_CLEANUP_CONF_TARGET_PATH))
+    assert cleanup_spec.endswith("/work/shellprocess-cleanup.conf")
 
 
 def test_initcpio_conf_override_regenerates_every_preset():
