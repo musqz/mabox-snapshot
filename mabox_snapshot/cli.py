@@ -174,11 +174,17 @@ def cmd_create(args: argparse.Namespace) -> int:
     # INITCPIO_CONF_OVERRIDE) -- injected for every build, both modes,
     # same treatment as unpackfs_conf_path itself.
     initcpio_override_path = cfg.workdir / "initcpio-override.conf"
+    # Calamares' stock services.conf marks the "graphical" unit enable
+    # mandatory, which aborts preserving-mode installs (see calamares.py's
+    # SERVICES_CONF_OVERRIDE) -- injected for every build, both modes,
+    # same treatment as initcpio_override_path above.
+    services_override_path = cfg.workdir / "services-override.conf"
     settings_conf_path = cfg.workdir / "settings-encrypt.conf" if cfg.encrypt else None
     shellprocess_conf_path = cfg.workdir / "shellprocess-remount.conf" if cfg.encrypt else None
     unpackfs_pseudo = calamares.unpackfs_pseudo_specs(
         unpackfs_conf_path,
         initcpio_override_path,
+        services_override_path,
         encrypt=cfg.encrypt,
         settings_conf_path=settings_conf_path,
         shellprocess_conf_path=shellprocess_conf_path,
@@ -190,6 +196,7 @@ def cmd_create(args: argparse.Namespace) -> int:
     # mksquashfs just warns and keeps whatever's already in the source tree.
     plan.layers[0].exclude_patterns.append(calamares.UNPACKFS_CONF_PATH)
     plan.layers[0].exclude_patterns.append(calamares.INITCPIO_CONF_TARGET_PATH)
+    plan.layers[0].exclude_patterns.append(calamares.SERVICES_CONF_TARGET_PATH)
     if cfg.encrypt:
         plan.layers[0].exclude_patterns.append(calamares.SETTINGS_CONF_TARGET_PATH)
         plan.layers[0].exclude_patterns.append(calamares.SHELLPROCESS_CONF_TARGET_PATH)
@@ -374,6 +381,7 @@ def cmd_create(args: argparse.Namespace) -> int:
         calamares.build_unpackfs_conf([layer.name for layer in plan.layers], encrypt=cfg.encrypt)
     )
     initcpio_override_path.write_text(calamares.INITCPIO_CONF_OVERRIDE)
+    services_override_path.write_text(calamares.SERVICES_CONF_OVERRIDE)
     if cfg.encrypt:
         settings_conf_path.write_text(
             calamares.insert_live_source_job(constants.CALAMARES_SETTINGS_FILE.read_text())

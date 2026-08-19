@@ -143,7 +143,9 @@ def test_insert_live_source_job_raises_when_unpackfs_missing():
 
 
 def test_unpackfs_pseudo_specs_declares_parent_dirs_before_the_file():
-    specs = calamares.unpackfs_pseudo_specs("/work/unpackfs.conf", "/work/initcpio-override.conf")
+    specs = calamares.unpackfs_pseudo_specs(
+        "/work/unpackfs.conf", "/work/initcpio-override.conf", "/work/services-override.conf"
+    )
     assert specs[0] == "etc/calamares d 755 0 0"
     assert specs[1] == "etc/calamares/modules d 755 0 0"
     assert specs[2].startswith(f"{calamares.UNPACKFS_CONF_PATH} f 644 0 0 cat ")
@@ -151,26 +153,40 @@ def test_unpackfs_pseudo_specs_declares_parent_dirs_before_the_file():
 
 
 def test_unpackfs_pseudo_specs_quotes_a_path_with_spaces():
-    specs = calamares.unpackfs_pseudo_specs("/work dir/unpackfs.conf", "/work/initcpio-override.conf")
+    specs = calamares.unpackfs_pseudo_specs(
+        "/work dir/unpackfs.conf", "/work/initcpio-override.conf", "/work/services-override.conf"
+    )
     assert "'/work dir/unpackfs.conf'" in specs[2]
 
 
 def test_unpackfs_pseudo_specs_always_injects_initcpio_override():
-    specs = calamares.unpackfs_pseudo_specs("/work/unpackfs.conf", "/work/initcpio-override.conf")
-    assert len(specs) == 4
+    specs = calamares.unpackfs_pseudo_specs(
+        "/work/unpackfs.conf", "/work/initcpio-override.conf", "/work/services-override.conf"
+    )
+    assert len(specs) == 5
     initcpio_spec = next(s for s in specs if s.startswith(calamares.INITCPIO_CONF_TARGET_PATH))
     assert initcpio_spec.endswith("/work/initcpio-override.conf")
+
+
+def test_unpackfs_pseudo_specs_always_injects_services_override():
+    specs = calamares.unpackfs_pseudo_specs(
+        "/work/unpackfs.conf", "/work/initcpio-override.conf", "/work/services-override.conf"
+    )
+    assert len(specs) == 5
+    services_spec = next(s for s in specs if s.startswith(calamares.SERVICES_CONF_TARGET_PATH))
+    assert services_spec.endswith("/work/services-override.conf")
 
 
 def test_unpackfs_pseudo_specs_encrypt_true_injects_settings_and_shellprocess():
     specs = calamares.unpackfs_pseudo_specs(
         "/work/unpackfs.conf",
         "/work/initcpio-override.conf",
+        "/work/services-override.conf",
         encrypt=True,
         settings_conf_path="/work/settings-encrypt.conf",
         shellprocess_conf_path="/work/shellprocess-remount.conf",
     )
-    assert len(specs) == 6
+    assert len(specs) == 7
     settings_spec = next(s for s in specs if s.startswith(calamares.SETTINGS_CONF_TARGET_PATH))
     assert settings_spec.endswith("/work/settings-encrypt.conf")
     shellprocess_spec = next(s for s in specs if s.startswith(calamares.SHELLPROCESS_CONF_TARGET_PATH))
@@ -179,3 +195,11 @@ def test_unpackfs_pseudo_specs_encrypt_true_injects_settings_and_shellprocess():
 
 def test_initcpio_conf_override_regenerates_every_preset():
     assert "kernel: all" in calamares.INITCPIO_CONF_OVERRIDE
+
+
+def test_services_conf_override_drops_graphical_unit_keeps_networkmanager_mandatory():
+    assert 'name: "graphical"' not in calamares.SERVICES_CONF_OVERRIDE
+    assert 'name: "NetworkManager"' in calamares.SERVICES_CONF_OVERRIDE
+    assert "mandatory: true" in calamares.SERVICES_CONF_OVERRIDE
+    assert 'name: "pacman-init"' in calamares.SERVICES_CONF_OVERRIDE
+    assert 'action: "mask"' in calamares.SERVICES_CONF_OVERRIDE
