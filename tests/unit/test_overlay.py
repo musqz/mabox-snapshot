@@ -172,11 +172,29 @@ def test_build_overlay_noop_for_preserving_mode(tmp_path, monkeypatch):
 def test_build_overlay_reset_mode_populates_overlay_dir_in_order(tmp_path, monkeypatch):
     called = []
     monkeypatch.setattr(overlay.seed, "seed_demo_home", lambda *a, **kw: called.append("seed"))
-    monkeypatch.setattr(overlay.calamares, "build_calamares_branding", lambda *a, **kw: called.append("calamares"))
+    monkeypatch.setattr(
+        overlay.calamares, "build_calamares_branding", lambda *a, **kw: called.append("calamares") or True
+    )
+    monkeypatch.setattr(overlay.calamares, "write_removeuser_override", lambda *a, **kw: called.append("removeuser"))
     monkeypatch.setattr(overlay.permissions, "normalize", lambda *a, **kw: called.append("normalize"))
     monkeypatch.setattr(overlay.sanitize, "write_sanitized_files", lambda *a, **kw: called.append("sanitize"))
 
     plan = overlay.BuildPlan(mode="reset", layers=[], overlay_dir=tmp_path / "overlay")
     overlay.build_overlay(plan)
 
-    assert called == ["seed", "calamares", "normalize", "sanitize"]
+    assert called == ["seed", "calamares", "removeuser", "normalize", "sanitize"]
+
+
+def test_build_overlay_reset_mode_writes_settings_override_when_branding_unconfigured(tmp_path, monkeypatch):
+    called = []
+    monkeypatch.setattr(overlay.seed, "seed_demo_home", lambda *a, **kw: None)
+    monkeypatch.setattr(overlay.calamares, "build_calamares_branding", lambda *a, **kw: False)
+    monkeypatch.setattr(overlay.calamares, "write_settings_override", lambda *a, **kw: called.append("settings"))
+    monkeypatch.setattr(overlay.calamares, "write_removeuser_override", lambda *a, **kw: called.append("removeuser"))
+    monkeypatch.setattr(overlay.permissions, "normalize", lambda *a, **kw: None)
+    monkeypatch.setattr(overlay.sanitize, "write_sanitized_files", lambda *a, **kw: None)
+
+    plan = overlay.BuildPlan(mode="reset", layers=[], overlay_dir=tmp_path / "overlay")
+    overlay.build_overlay(plan)
+
+    assert called == ["settings", "removeuser"]
