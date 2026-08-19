@@ -39,6 +39,7 @@ def build_command(
     compression: str,
     compression_level: int | None,
     pseudo_files: list[str] | None = None,
+    pseudo_file_list: Path | None = None,
 ) -> list[str]:
     cmd = [
         "mksquashfs",
@@ -54,6 +55,13 @@ def build_command(
         cmd += ["-Xcompression-level", str(compression_level)]
     for spec in pseudo_files or []:
         cmd += ["-p", spec]
+    # -pf reads many pseudo-file specs from a file, one per line -- the
+    # right tool once there are hundreds of them (see seed.py's
+    # etc_skel_pseudo_specs()); individual -p args stay in use above for
+    # the handful of small, fixed etc/calamares/* entries, where they're
+    # still readable in a printed dry-run command.
+    if pseudo_file_list is not None:
+        cmd += ["-pf", str(pseudo_file_list)]
     return cmd
 
 
@@ -64,6 +72,7 @@ def build(
     compression: str = "zstd",
     compression_level: int | None = None,
     pseudo_files: list[str] | None = None,
+    pseudo_file_list: Path | None = None,
 ) -> None:
-    cmd = build_command(sources, dest, exclude_file, compression, compression_level, pseudo_files)
+    cmd = build_command(sources, dest, exclude_file, compression, compression_level, pseudo_files, pseudo_file_list)
     subprocess.run(cmd, check=True)

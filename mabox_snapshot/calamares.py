@@ -468,6 +468,33 @@ def insert_live_source_job(settings_text: str) -> str:
     return text[: sequence_match.start()] + instances_block + text[sequence_match.start() :]
 
 
+def remove_users_step(settings_text: str) -> str:
+    """Removes every '- users' line from settings.conf -- both the one in
+    the show phase's page list and the one in the exec phase's job list.
+    Preserving mode's snapshot already contains a real, working account
+    with its own real password, making Calamares' account-creation step
+    redundant at best -- and actively harmful at worst: confirmed via a
+    real install, typing the same username as the account already in the
+    snapshot makes 'useradd' hard-abort, and since 'users' runs *before*
+    grubcfg/bootloader in Calamares' own exec sequence, that abort skips
+    bootloader installation entirely without any obvious sign why -- the
+    install reports failure, but Calamares still lets the install proceed
+    to a reboot into a half-finished, unbootable disk. Typing a different
+    username avoids the abort but creates a second, broken-desktop account
+    (see seed.etc_skel_pseudo_specs()). Simplest fix: never offer account
+    creation at all for a mode whose entire premise is "this is already
+    your account". Raises ValueError if no '- users' line is found at all
+    -- fail loudly if Calamares' upstream settings.conf format ever
+    changes unexpectedly, rather than silently leave the step in place."""
+    matches = list(re.finditer(r"(?m)^[ \t]*- users[ \t]*$\n?", settings_text))
+    if not matches:
+        raise ValueError("settings.conf has no '- users' line -- can't remove the account-creation step")
+    result = settings_text
+    for match in reversed(matches):
+        result = result[: match.start()] + result[match.end() :]
+    return result
+
+
 # Calamares' stock initcpio.conf hardcodes `kernel: linux` -- after
 # install it regenerates the initramfs on the target for a preset
 # literally named "linux" (/etc/mkinitcpio.d/linux.preset). Mabox uses
@@ -571,17 +598,24 @@ def unpackfs_pseudo_specs(
     source scan (see cli.py) -- if a real file already sits there,
     mksquashfs silently keeps it over the pseudo-file instead.
 
-    encrypt=True additionally injects a modified settings.conf (with the
-    remount and cleanup jobs spliced into its exec sequence, see
-    insert_live_source_job()) and both jobs' own module configs (see
-    build_shellprocess_remount_conf()/build_shellprocess_cleanup_conf())
-    -- reusing the same two pseudo-dirs above, since all these files live
-    under them too. Callers must pass settings_conf_path/
-    shellprocess_conf_path/shellprocess_cleanup_conf_path (and exclude
-    all three target paths from the layer's own source scan, same
-    reasoning as UNPACKFS_CONF_PATH) whenever encrypt=True. There's no
-    permanent, on-disk file to generate these from: preserving mode has
-    no overlay step to write into (that's reset-mode only), and writing
+    settings_conf_path, when given, additionally injects a modified
+    settings.conf at SETTINGS_CONF_TARGET_PATH -- reusing the same two
+    pseudo-dirs above. Passed whenever plan.mode == "preserving" (see
+    cli.py): every preserving-mode build now needs its own settings.conf,
+    at minimum to remove the '- users' step (see remove_users_step() --
+    preserving mode's snapshot already has a real account, so Calamares'
+    own account-creation step is redundant and, on a username collision,
+    install-aborting). encrypt=True additionally splices the remount and
+    cleanup jobs into that same settings.conf's exec sequence (see
+    insert_live_source_job()) and injects both jobs' own module configs
+    (see build_shellprocess_remount_conf()/build_shellprocess_cleanup_conf())
+    -- callers must then also pass shellprocess_conf_path/
+    shellprocess_cleanup_conf_path. Callers must exclude every target path
+    actually injected from the layer's own source scan (see cli.py), same
+    reasoning as UNPACKFS_CONF_PATH -- if a real file already sits there,
+    mksquashfs silently keeps it over the pseudo-file instead. There's no
+    permanent, on-disk file to generate these from: preserving mode has no
+    overlay step to write into (that's reset-mode only), and writing
     straight to the *build host's own* /etc/calamares would mean
     permanently altering the machine's real installer config just to
     build a snapshot."""
@@ -592,8 +626,9 @@ def unpackfs_pseudo_specs(
         f"{INITCPIO_CONF_TARGET_PATH} f 644 0 0 cat {shlex.quote(str(initcpio_conf_path))}",
         f"{SERVICES_CONF_TARGET_PATH} f 644 0 0 cat {shlex.quote(str(services_conf_path))}",
     ]
-    if encrypt:
+    if settings_conf_path is not None:
         specs.append(f"{SETTINGS_CONF_TARGET_PATH} f 644 0 0 cat {shlex.quote(str(settings_conf_path))}")
+    if encrypt:
         specs.append(f"{SHELLPROCESS_CONF_TARGET_PATH} f 644 0 0 cat {shlex.quote(str(shellprocess_conf_path))}")
         specs.append(
             f"{SHELLPROCESS_CLEANUP_CONF_TARGET_PATH} f 644 0 0 cat {shlex.quote(str(shellprocess_cleanup_conf_path))}"
