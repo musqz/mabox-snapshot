@@ -1,18 +1,24 @@
-"""Calamares installer integration -- a thin branding overlay only.
+"""Calamares installer integration.
 
-The install sequence itself (partition/bootloader/users/mount/...) is
-never touched: it comes straight from the calamares package's own tested
-/usr/share/calamares/settings.conf + modules/*.conf, already present in
-the squashed rootfs because calamares is an installed package on the
-build host (verified: git.maboxlinux.org has no Mabox-specific Calamares
-repo -- Mabox installs just inherit stock Manjaro branding/config unless
-this tool overrides it).
+Mostly a thin branding overlay: it comes straight from the calamares
+package's own tested /usr/share/calamares/settings.conf + modules/*.conf,
+already present in the squashed rootfs because calamares is an installed
+package on the build host (verified: git.maboxlinux.org has no
+Mabox-specific Calamares repo -- Mabox installs just inherit stock
+Manjaro branding/config unless this tool overrides it). A few targeted
+exceptions do touch the install sequence itself, each one forced by a
+real install failure that traces back to the same root cause: this
+config is written for a freshly-pacstrapped rootfs, not a
+snapshot-of-a-running-system install (see insert_live_source_job(),
+INITCPIO_CONF_OVERRIDE, SERVICES_CONF_OVERRIDE, and
+insert_removeuser_job() below for each one's specific story).
 
 Custom branding is entirely optional and reset-mode only (the "share
 this with someone else" mode -- preserving mode is a personal clone, not
 something that needs a welcome screen). With no images/branding.toml
 configured, build_calamares_branding() does nothing and Calamares shows
-its stock Manjaro branding.
+its stock Manjaro branding. Reset mode's demo account removal (see
+insert_removeuser_job()) is unconditional, independent of branding.
 """
 
 from __future__ import annotations
@@ -210,15 +216,66 @@ def build_show_qml(branding: BrandingConfig) -> str:
 SETTINGS_CONF_TARGET_PATH = "etc/calamares/settings.conf"
 
 
-def write_settings_override(overlay_dir: Path, source: Path = constants.CALAMARES_SETTINGS_FILE) -> None:
-    """A copy of Calamares' own tested settings.conf with only the
-    'branding:' line repointed at the mabox component -- the install
-    sequence itself is never touched."""
+# Calamares' stock removeuser module (shipped, just never wired into the
+# stock settings.conf's exec sequence -- confirmed present at
+# /usr/share/calamares/modules/removeuser.conf on this host, defaulting
+# to `username: live`, which does nothing on a mabox-snapshot ISO: reset
+# mode's synthetic account is named "demo", not "live" -- see
+# constants.DEMO_USERNAME/sanitize.py) userdel's a named account from the
+# target. Without it, reset mode's demo/demo account -- meant only as a
+# convenience login for the *live* "try before you install" session --
+# survives untouched onto the installed system: confirmed against a real
+# install, the freshly-created account and "demo" both work at the
+# lightdm greeter after a completed install. Override removeuser.conf to
+# target DEMO_USERNAME, and insert '- removeuser' into settings.conf's
+# exec sequence (stock settings.conf never runs this module at all).
+# Reset-mode only -- preserving mode is a personal clone of a real
+# system, it was never running with a synthetic demo account to remove.
+REMOVEUSER_CONF_TARGET_PATH = "etc/calamares/modules/removeuser.conf"
+REMOVEUSER_CONF_OVERRIDE = f"username: {constants.DEMO_USERNAME}\n"
+
+
+def insert_removeuser_job(settings_text: str) -> str:
+    """Inserts '- removeuser' immediately after the last '- users' line
+    in settings.conf. '- users' appears twice in the stock file (once in
+    the show phase, once in exec) -- the last match is always the exec
+    one, since Calamares' own sequence format requires exec to follow
+    the show phase it consumes jobs from. Raises ValueError if no
+    '- users' line exists at all -- fail loudly rather than silently
+    produce a settings.conf that never removes reset mode's demo
+    account."""
+    matches = list(re.finditer(r"(?m)^([ \t]*)- users[ \t]*$", settings_text))
+    if not matches:
+        raise ValueError("settings.conf has no '- users' line -- can't insert the removeuser job")
+    match = matches[-1]
+    indent = match.group(1)
+    line_end = match.end() + 1  # past '- users'' own trailing newline
+    insertion = f"{indent}- removeuser\n"
+    return settings_text[:line_end] + insertion + settings_text[line_end:]
+
+
+def write_removeuser_override(overlay_dir: Path) -> None:
+    dest = overlay_dir / REMOVEUSER_CONF_TARGET_PATH
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(REMOVEUSER_CONF_OVERRIDE)
+
+
+def write_settings_override(
+    overlay_dir: Path, source: Path = constants.CALAMARES_SETTINGS_FILE, repoint_branding: bool = False
+) -> None:
+    """A copy of Calamares' own tested settings.conf with '- removeuser'
+    spliced into its exec sequence (see insert_removeuser_job() -- always
+    done, this is reset mode's only way to shed its demo account).
+    repoint_branding=True additionally repoints the 'branding:' line at
+    the mabox component -- set only by build_calamares_branding(), when
+    write_branding() has actually populated that component's files."""
     text = source.read_text()
-    new_text = re.sub(r"(?m)^branding:\s*\S+", f"branding: {constants.CALAMARES_BRANDING_COMPONENT}", text)
+    if repoint_branding:
+        text = re.sub(r"(?m)^branding:\s*\S+", f"branding: {constants.CALAMARES_BRANDING_COMPONENT}", text)
+    text = insert_removeuser_job(text)
     dest = overlay_dir / SETTINGS_CONF_TARGET_PATH
     dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(new_text)
+    dest.write_text(text)
 
 
 def write_branding(overlay_dir: Path, branding: BrandingConfig, images_dir: Path = constants.IMAGES_DIR) -> None:
@@ -242,7 +299,7 @@ def build_calamares_branding(overlay_dir: Path, images_dir: Path = constants.IMA
     if branding is None:
         return False
     write_branding(overlay_dir, branding, images_dir)
-    write_settings_override(overlay_dir)
+    write_settings_override(overlay_dir, repoint_branding=True)
     return True
 
 

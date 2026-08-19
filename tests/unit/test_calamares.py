@@ -47,16 +47,47 @@ def test_build_show_qml_embeds_slide_data():
     assert "radius: 8" in qml
 
 
+SETTINGS_CONF_FIXTURE = (
+    "modules-search: [ local ]\nbranding: manjaro\nprompt-install: false\n"
+    "sequence:\n- show:\n  - users\n- exec:\n  - unpackfs\n  - users\n  - services\n"
+)
+
+
 def test_write_settings_override_repoints_branding_line(tmp_path):
     source = tmp_path / "settings.conf"
-    source.write_text("modules-search: [ local ]\nbranding: manjaro\nprompt-install: false\n")
+    source.write_text(SETTINGS_CONF_FIXTURE)
+
+    overlay_dir = tmp_path / "overlay"
+    calamares.write_settings_override(overlay_dir, source, repoint_branding=True)
+
+    result = (overlay_dir / "etc/calamares/settings.conf").read_text()
+    assert "branding: mabox" in result
+    assert "prompt-install: false" in result  # rest of the file untouched
+
+
+def test_write_settings_override_default_does_not_repoint_branding(tmp_path):
+    source = tmp_path / "settings.conf"
+    source.write_text(SETTINGS_CONF_FIXTURE)
 
     overlay_dir = tmp_path / "overlay"
     calamares.write_settings_override(overlay_dir, source)
 
     result = (overlay_dir / "etc/calamares/settings.conf").read_text()
-    assert "branding: mabox" in result
-    assert "prompt-install: false" in result  # rest of the file untouched
+    assert "branding: manjaro" in result
+
+
+def test_write_settings_override_always_inserts_removeuser(tmp_path):
+    source = tmp_path / "settings.conf"
+    source.write_text(SETTINGS_CONF_FIXTURE)
+
+    overlay_dir = tmp_path / "overlay"
+    calamares.write_settings_override(overlay_dir, source)
+
+    result = (overlay_dir / "etc/calamares/settings.conf").read_text()
+    lines = result.splitlines()
+    users_indices = [i for i, line in enumerate(lines) if line == "  - users"]
+    assert len(users_indices) == 2
+    assert lines[users_indices[-1] + 1] == "  - removeuser"
 
 
 def test_write_branding_copies_slide_images_and_writes_desc(tmp_path):
@@ -203,3 +234,29 @@ def test_services_conf_override_drops_graphical_unit_keeps_networkmanager_mandat
     assert "mandatory: true" in calamares.SERVICES_CONF_OVERRIDE
     assert 'name: "pacman-init"' in calamares.SERVICES_CONF_OVERRIDE
     assert 'action: "mask"' in calamares.SERVICES_CONF_OVERRIDE
+
+
+def test_insert_removeuser_job_inserts_after_the_exec_phase_users_line():
+    settings = "sequence:\n- show:\n  - users\n- exec:\n  - unpackfs\n  - users\n  - displaymanager\n"
+    result = calamares.insert_removeuser_job(settings)
+    lines = result.splitlines()
+    users_indices = [i for i, line in enumerate(lines) if line == "  - users"]
+    assert len(users_indices) == 2  # show-phase 'users' is untouched, only the exec one gets removeuser after it
+    assert lines[users_indices[-1] + 1] == "  - removeuser"
+
+
+def test_insert_removeuser_job_raises_when_users_missing():
+    with pytest.raises(ValueError):
+        calamares.insert_removeuser_job("sequence:\n- exec:\n  - unpackfs\n")
+
+
+def test_removeuser_conf_override_targets_demo_account():
+    assert calamares.REMOVEUSER_CONF_OVERRIDE == f"username: {constants.DEMO_USERNAME}\n"
+
+
+def test_write_removeuser_override_writes_demo_username(tmp_path):
+    overlay_dir = tmp_path / "overlay"
+    calamares.write_removeuser_override(overlay_dir)
+
+    result = (overlay_dir / calamares.REMOVEUSER_CONF_TARGET_PATH).read_text()
+    assert result == f"username: {constants.DEMO_USERNAME}\n"

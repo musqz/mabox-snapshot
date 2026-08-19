@@ -91,14 +91,19 @@ def resolve_plan(
 
 
 def build_overlay(plan: BuildPlan) -> None:
-    """Populates plan.overlay_dir for reset mode: the seeded demo home and
-    (if configured) custom Calamares branding, umask-normalized, then the
-    sanitized passwd/shadow/group/etc written last (each self-chmod'd --
-    see sanitize.py -- so write order relative to normalize() doesn't
-    matter for their permissions)."""
+    """Populates plan.overlay_dir for reset mode: the seeded demo home,
+    (if configured) custom Calamares branding, and -- unconditionally,
+    independent of branding -- the removeuser override that strips reset
+    mode's demo account back out during install (see calamares.py's
+    insert_removeuser_job()). Then umask-normalized, then the sanitized
+    passwd/shadow/group/etc written last (each self-chmod'd -- see
+    sanitize.py -- so write order relative to normalize() doesn't matter
+    for their permissions)."""
     if plan.mode != "reset":
         return
     seed.seed_demo_home(plan.overlay_dir)
-    calamares.build_calamares_branding(plan.overlay_dir)
+    if not calamares.build_calamares_branding(plan.overlay_dir):
+        calamares.write_settings_override(plan.overlay_dir)
+    calamares.write_removeuser_override(plan.overlay_dir)
     permissions.normalize(plan.overlay_dir)
     sanitize.write_sanitized_files(plan.overlay_dir)
