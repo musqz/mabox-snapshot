@@ -41,6 +41,12 @@ def test_shipped_default_parses_and_includes_curated_home_bloat_entries():
     # Steam userdata/settings must never be swept up -- only the
     # regenerable steamapps/ subpaths above.
     assert not any(p.startswith("home/*/.local/share/Steam/userdata") for p in patterns)
+    # The source machine's own EFI System Partition content must never be
+    # copied onto a new install's target -- confirmed via a real --encrypt
+    # install: a stale foreign EFI binary there can end up being what
+    # firmware actually boots, still pointing at the source machine's own
+    # partition UUIDs instead of the target's.
+    assert "boot/efi/*" in patterns
 
 
 def test_parse_lines_skips_comments_and_blanks():
