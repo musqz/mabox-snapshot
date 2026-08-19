@@ -402,7 +402,8 @@ def cmd_create(args: argparse.Namespace) -> int:
         if cfg.encrypt and layer.name == "rootfs":
             luks.encrypt_squashfs(layer_dest[layer.name], layer_luks_dest[layer.name], passphrase)
 
-    (iso_root / "boot").mkdir(parents=True, exist_ok=True)
+    (iso_root / "boot" / "grub").mkdir(parents=True, exist_ok=True)
+    shutil.copy2(constants.GRUB_UNICODE_FONT, iso_root / "boot" / "grub" / "unicode.pf2")
     if cfg.encrypt:
         isobuild.write_mkinitcpio_conf(mkinitcpio_conf, constants.MKINITCPIO_MISO_LUKS_MODULES, constants.MKINITCPIO_MISO_LUKS_HOOKS)
     else:

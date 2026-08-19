@@ -155,6 +155,8 @@ def build_grub_cfg(kernel_names: list[str], misolabel: str = constants.ISO_VOLID
         "set timeout=5",
         "insmod all_video",
         "insmod gfxterm",
+        "insmod font",
+        "loadfont /boot/grub/unicode.pf2",
         "terminal_output gfxterm",
     ]
     if has_splash:
