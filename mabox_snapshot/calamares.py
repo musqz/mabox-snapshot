@@ -356,6 +356,40 @@ INITCPIO_CONF_TARGET_PATH = "etc/calamares/modules/initcpio.conf"
 INITCPIO_CONF_OVERRIDE = "kernel: all\nbe_unsafe: false\n"
 
 
+# Manjaro's stock services.conf marks the "graphical" unit enable
+# mandatory: true -- confirmed against a real install ("Cannot enable
+# systemd unit graphical. systemctl enable call in chroot returned error
+# code 1", the whole install aborts, no Calamares.log ever written to
+# find the real systemctl stderr). The blanket graphical.target enable is
+# redundant on top of the dedicated displaymanager module (already
+# further down Calamares' own exec sequence, and the thing that actually
+# configures/enables the login manager) -- it's a belt-and-braces default
+# that makes sense for a freshly-pacstrapped rootfs, not a
+# snapshot-of-a-running-system install. Preserving mode carries over the
+# live ISO's own systemd on-disk state (whatever masks/symlinks its own
+# autologin desktop session uses), which this offline `systemctl enable`
+# chokes on in a way a fresh install never would -- same pattern as the
+# initcpio.conf bug above: harmless on a normal Manjaro ISO, fatal
+# against a snapshotted live system. Fix: override services.conf, keep
+# NetworkManager (mandatory -- needed for networking on first boot) and
+# pacman-init masking (Arch-specific correctness) exactly as shipped,
+# drop the graphical entry entirely. Applies to both modes
+# unconditionally, same reasoning as INITCPIO_CONF_OVERRIDE above.
+SERVICES_CONF_TARGET_PATH = "etc/calamares/modules/services.conf"
+SERVICES_CONF_OVERRIDE = (
+    "units:\n"
+    '  - name: "NetworkManager"\n'
+    '    action: "enable"\n'
+    "    mandatory: true\n"
+    "\n"
+    '  - name: "org.cups.cupsd"\n'
+    '    action: "enable"\n'
+    "\n"
+    '  - name: "pacman-init"\n'
+    '    action: "mask"\n'
+)
+
+
 def build_unpackfs_conf(
     layer_names: list[str],
     basedir: str = constants.MISO_BASEDIR,
@@ -382,14 +416,17 @@ def build_unpackfs_conf(
 def unpackfs_pseudo_specs(
     conf_path: Path,
     initcpio_conf_path: Path,
+    services_conf_path: Path,
     encrypt: bool = False,
     settings_conf_path: Path | None = None,
     shellprocess_conf_path: Path | None = None,
 ) -> list[str]:
     """mksquashfs -p specs injecting conf_path's contents (written by the
-    caller from build_unpackfs_conf()) at UNPACKFS_CONF_PATH, and
+    caller from build_unpackfs_conf()) at UNPACKFS_CONF_PATH,
     initcpio_conf_path's contents (INITCPIO_CONF_OVERRIDE, written
-    verbatim by the caller) at INITCPIO_CONF_TARGET_PATH, inside the
+    verbatim by the caller) at INITCPIO_CONF_TARGET_PATH, and
+    services_conf_path's contents (SERVICES_CONF_OVERRIDE, written
+    verbatim by the caller) at SERVICES_CONF_TARGET_PATH, inside the
     squashed rootfs layer. The leading two dir entries are required, not
     cosmetic -- verified empirically: mksquashfs's -p file spec fails
     outright ('Pathname "etc" does not exist in filesystem') unless its
@@ -397,7 +434,7 @@ def unpackfs_pseudo_specs(
     path Calamares only optionally reads) usually isn't, even on a host
     with calamares itself installed. Declaring them as pseudo-dirs works
     whether or not the real dir already exists (also verified). The
-    caller must also exclude both target paths from the layer's own
+    caller must also exclude all three target paths from the layer's own
     source scan (see cli.py) -- if a real file already sits there,
     mksquashfs silently keeps it over the pseudo-file instead.
 
@@ -418,6 +455,7 @@ def unpackfs_pseudo_specs(
         "etc/calamares/modules d 755 0 0",
         f"{UNPACKFS_CONF_PATH} f 644 0 0 cat {shlex.quote(str(conf_path))}",
         f"{INITCPIO_CONF_TARGET_PATH} f 644 0 0 cat {shlex.quote(str(initcpio_conf_path))}",
+        f"{SERVICES_CONF_TARGET_PATH} f 644 0 0 cat {shlex.quote(str(services_conf_path))}",
     ]
     if encrypt:
         specs.append(f"{SETTINGS_CONF_TARGET_PATH} f 644 0 0 cat {shlex.quote(str(settings_conf_path))}")
