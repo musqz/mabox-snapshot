@@ -349,7 +349,8 @@ UNPACKFS_FILE_ENTRY_TEMPLATE = """    - source: "{path}"
 # in the live environment before the real install" problem): a
 # `module@instanceId` sequence entry pairs with a
 # `modules/module@instanceId.conf` file, literal '@' included.
-SHELLPROCESS_INSTANCE = "shellprocess@mabox-remount-live-source"
+SHELLPROCESS_INSTANCE_ID = "mabox-remount-live-source"
+SHELLPROCESS_INSTANCE = f"shellprocess@{SHELLPROCESS_INSTANCE_ID}"
 SHELLPROCESS_CONF_TARGET_PATH = f"etc/calamares/modules/{SHELLPROCESS_INSTANCE}.conf"
 
 SHELLPROCESS_REMOUNT_CONF_TEMPLATE = """---
@@ -381,16 +382,41 @@ def build_shellprocess_remount_conf(
 def insert_live_source_job(settings_text: str) -> str:
     """Inserts SHELLPROCESS_INSTANCE immediately before the '- unpackfs'
     line in settings.conf's exec sequence, preserving its exact
-    indentation. Raises ValueError if that anchor line isn't found --
-    fail loudly if Calamares' upstream settings.conf format ever changes
-    unexpectedly, rather than silently produce a settings.conf that never
-    runs the remount job at all."""
+    indentation, AND declares it in a top-level 'instances:' block --
+    confirmed via a real install this was the actual missing piece the
+    whole time: a bare `module@id` reference in the exec sequence does
+    not by itself register a module instance with Calamares (verified
+    against a real install: the sequence entry landed correctly, the
+    module's own .conf file was present and well-formed, and the job
+    still never ran -- no /run/mabox-snapshot directory was ever
+    created, not even the empty one 'mkdir -p' would leave behind on a
+    mount failure). Confirmed by re-checking the reference config this
+    mechanism was modeled on, ~/Github/penguins-eggs's own
+    settings.conf: it declares an explicit 'instances:' entry (id/
+    module/config) for each of its own named shellprocess jobs -- that
+    block is what actually tells Calamares an instance exists at all;
+    the exec sequence entry only orders it relative to other jobs.
+    Raises ValueError if the '- unpackfs' anchor or the top-level
+    'sequence:' key isn't found -- fail loudly if Calamares' upstream
+    settings.conf format ever changes unexpectedly, rather than silently
+    produce a settings.conf that never runs the remount job at all."""
     match = re.search(r"(?m)^([ \t]*)- unpackfs[ \t]*$", settings_text)
     if match is None:
         raise ValueError("settings.conf has no '- unpackfs' line in its exec sequence -- can't insert the remount job")
     indent = match.group(1)
     insertion = f"{indent}- {SHELLPROCESS_INSTANCE}\n"
-    return settings_text[: match.start()] + insertion + settings_text[match.start() :]
+    text = settings_text[: match.start()] + insertion + settings_text[match.start() :]
+
+    sequence_match = re.search(r"(?m)^sequence:[ \t]*$", text)
+    if sequence_match is None:
+        raise ValueError("settings.conf has no top-level 'sequence:' key -- can't declare the remount job's instance")
+    instances_block = (
+        "instances:\n"
+        f"  - id: {SHELLPROCESS_INSTANCE_ID}\n"
+        "    module: shellprocess\n"
+        f"    config: {SHELLPROCESS_INSTANCE}.conf\n\n"
+    )
+    return text[: sequence_match.start()] + instances_block + text[sequence_match.start() :]
 
 
 # Calamares' stock initcpio.conf hardcodes `kernel: linux` -- after
