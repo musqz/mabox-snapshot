@@ -173,6 +173,24 @@ def test_insert_live_source_job_raises_when_unpackfs_missing():
         calamares.insert_live_source_job("sequence:\n- exec:\n  - partition\n  - mount\n")
 
 
+def test_insert_live_source_job_declares_shellprocess_instance():
+    settings = "sequence:\n- exec:\n  - partition\n  - mount\n  - unpackfs\n  - machineid\n"
+    result = calamares.insert_live_source_job(settings)
+    lines = result.splitlines()
+    assert "instances:" in lines
+    assert f"  - id: {calamares.SHELLPROCESS_INSTANCE_ID}" in lines
+    assert "    module: shellprocess" in lines
+    assert f"    config: {calamares.SHELLPROCESS_INSTANCE}.conf" in lines
+    # the instances: block must come before sequence: (top-level keys),
+    # not get spliced into the middle of the exec list
+    assert lines.index("instances:") < lines.index("sequence:")
+
+
+def test_insert_live_source_job_raises_when_sequence_key_missing():
+    with pytest.raises(ValueError):
+        calamares.insert_live_source_job("exec:\n  - unpackfs\n")
+
+
 def test_unpackfs_pseudo_specs_declares_parent_dirs_before_the_file():
     specs = calamares.unpackfs_pseudo_specs(
         "/work/unpackfs.conf", "/work/initcpio-override.conf", "/work/services-override.conf"
