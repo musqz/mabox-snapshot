@@ -172,6 +172,7 @@ def test_build_overlay_noop_for_preserving_mode(tmp_path, monkeypatch):
 def test_build_overlay_reset_mode_populates_overlay_dir_in_order(tmp_path, monkeypatch):
     called = []
     monkeypatch.setattr(overlay.seed, "seed_demo_home", lambda *a, **kw: called.append("seed"))
+    monkeypatch.setattr(overlay.seed, "seed_etc_skel", lambda *a, **kw: called.append("etc_skel"))
     monkeypatch.setattr(
         overlay.calamares, "build_calamares_branding", lambda *a, **kw: called.append("calamares") or True
     )
@@ -182,12 +183,13 @@ def test_build_overlay_reset_mode_populates_overlay_dir_in_order(tmp_path, monke
     plan = overlay.BuildPlan(mode="reset", layers=[], overlay_dir=tmp_path / "overlay")
     overlay.build_overlay(plan)
 
-    assert called == ["seed", "calamares", "removeuser", "normalize", "sanitize"]
+    assert called == ["seed", "etc_skel", "calamares", "removeuser", "normalize", "sanitize"]
 
 
 def test_build_overlay_reset_mode_writes_settings_override_when_branding_unconfigured(tmp_path, monkeypatch):
     called = []
     monkeypatch.setattr(overlay.seed, "seed_demo_home", lambda *a, **kw: None)
+    monkeypatch.setattr(overlay.seed, "seed_etc_skel", lambda *a, **kw: None)
     monkeypatch.setattr(overlay.calamares, "build_calamares_branding", lambda *a, **kw: False)
     monkeypatch.setattr(overlay.calamares, "write_settings_override", lambda *a, **kw: called.append("settings"))
     monkeypatch.setattr(overlay.calamares, "write_removeuser_override", lambda *a, **kw: called.append("removeuser"))
