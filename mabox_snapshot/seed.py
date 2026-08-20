@@ -14,7 +14,9 @@ from __future__ import annotations
 
 import logging
 import os
+import shlex
 import shutil
+import stat
 from pathlib import Path
 
 from . import constants
@@ -60,6 +62,44 @@ def seed_etc_skel(overlay_dir: Path, skel_source: Path = constants.MABOX_SKEL_DI
 
     chown_recursive(dest, 0, 0)
     return dest
+
+
+def etc_skel_pseudo_specs(skel_source: Path = constants.MABOX_SKEL_DIR) -> list[str]:
+    """Same vendored tree as seed_etc_skel(), but as mksquashfs -p specs
+    targeting etc/skel/<relative-path> instead of a copy into an overlay
+    directory -- preserving mode has no overlay step to write into (that's
+    reset-mode only), so this is the only way to seed its /etc/skel too,
+    using the same pseudo-file mechanism unpackfs.conf/initcpio.conf/
+    services.conf already use to inject content into the squashed rootfs
+    without touching the real build host's own /etc/skel. Root-owned
+    (0 0), same convention as seed_etc_skel(). Walked top-down so a
+    directory's own pseudo-dir entry is always emitted before any entry
+    inside it -- mksquashfs's -p file specs fail outright unless their
+    parent directory already exists (verified empirically, same
+    requirement calamares.py's unpackfs_pseudo_specs() already documents
+    for etc/calamares/). The vendored tree has no symlinks (verified: a
+    plain `f`/`d` spec per entry is sufficient, no `s` spec needed).
+    Each file's mode is set from its own real executable bit (same
+    stat.S_IXUSR check permissions.normalize() already uses elsewhere in
+    this codebase) rather than a flat 644 -- the tree genuinely ships
+    executable scripts (tint2's Executor plugin runs some of these
+    directly), and seed_etc_skel()'s overlay-copytree path already
+    preserves them; this pseudo-file path needs the same care."""
+    if not skel_source.exists():
+        raise FileNotFoundError(
+            f"vendored mabox-skel not found at {skel_source} -- is mabox-snapshot installed via its package?"
+        )
+
+    specs = ["etc/skel d 755 0 0"]
+    for dirpath, dirnames, filenames in os.walk(skel_source):
+        rel_dir = Path(dirpath).relative_to(skel_source)
+        for name in sorted(dirnames):
+            specs.append(f"etc/skel/{rel_dir / name} d 755 0 0")
+        for name in sorted(filenames):
+            source_file = Path(dirpath) / name
+            mode = 755 if source_file.stat().st_mode & stat.S_IXUSR else 644
+            specs.append(f"etc/skel/{rel_dir / name} f {mode} 0 0 cat {shlex.quote(str(source_file))}")
+    return specs
 
 
 def chown_recursive(root: Path, uid: int, gid: int) -> None:
