@@ -10,7 +10,7 @@ from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
-from . import backup, calamares, changes, config, constants, excludes, grubcfg, history, isobuild, kernels, luks, overlay, packages, permissions, privilege, profiles, retention, skelaudit, squashfs
+from . import backup, calamares, changes, config, constants, excludes, grubcfg, history, isobuild, kernels, luks, overlay, packages, permissions, privilege, profiles, retention, seed, skelaudit, squashfs
 from . import workdir as workdir_mod
 from . import __version__
 
@@ -179,7 +179,14 @@ def cmd_create(args: argparse.Namespace) -> int:
     # SERVICES_CONF_OVERRIDE) -- injected for every build, both modes,
     # same treatment as initcpio_override_path above.
     services_override_path = cfg.workdir / "services-override.conf"
-    settings_conf_path = cfg.workdir / "settings-encrypt.conf" if cfg.encrypt else None
+    # Every preserving-mode build needs its own settings.conf, at minimum
+    # to remove the '- users' step (see calamares.py's remove_users_step()
+    # -- preserving mode's snapshot already has a real account, and a
+    # username collision during install hard-aborts before grubcfg/
+    # bootloader ever run, confirmed against a real install). Reset mode
+    # handles its own settings.conf separately, via overlay.py's
+    # write_settings_override()/build_calamares_branding().
+    settings_conf_path = cfg.workdir / "settings-preserving.conf" if args.mode == "preserving" else None
     shellprocess_conf_path = cfg.workdir / "shellprocess-remount.conf" if cfg.encrypt else None
     shellprocess_cleanup_conf_path = cfg.workdir / "shellprocess-cleanup.conf" if cfg.encrypt else None
     unpackfs_pseudo = calamares.unpackfs_pseudo_specs(
@@ -191,6 +198,14 @@ def cmd_create(args: argparse.Namespace) -> int:
         shellprocess_conf_path=shellprocess_conf_path,
         shellprocess_cleanup_conf_path=shellprocess_cleanup_conf_path,
     )
+    # etc/skel seeding for preserving mode -- mirrors seed.seed_etc_skel()'s
+    # reset-mode overlay copy, but injected via mksquashfs pseudo-files
+    # since preserving mode has no overlay step to write into. ~1000
+    # entries (see seed.etc_skel_pseudo_specs()), too many for individual
+    # -p args, so written to a file and passed via squashfs.py's -pf
+    # support instead. Reset mode is untouched -- it already gets this via
+    # seed.seed_etc_skel() in overlay.build_overlay().
+    skel_pseudo_file_path = cfg.workdir / "skel-pseudo-file.list" if args.mode == "preserving" else None
     # Always the rootfs layer (plan.layers[0] in both modes, same as the
     # "new_excludes" case further down): without this, a real file already
     # sitting at one of these paths (e.g. a hand-placed admin workaround)
@@ -199,8 +214,14 @@ def cmd_create(args: argparse.Namespace) -> int:
     plan.layers[0].exclude_patterns.append(calamares.UNPACKFS_CONF_PATH)
     plan.layers[0].exclude_patterns.append(calamares.INITCPIO_CONF_TARGET_PATH)
     plan.layers[0].exclude_patterns.append(calamares.SERVICES_CONF_TARGET_PATH)
-    if cfg.encrypt:
+    if args.mode == "preserving":
         plan.layers[0].exclude_patterns.append(calamares.SETTINGS_CONF_TARGET_PATH)
+        # Without this, the build host's own real /etc/skel (which can be
+        # arbitrarily messy -- confirmed on a real dev host, personal app
+        # config had ended up copied there) would win over our pseudo-file
+        # injection for anything not explicitly covered by it.
+        plan.layers[0].exclude_patterns.append("etc/skel/*")
+    if cfg.encrypt:
         plan.layers[0].exclude_patterns.append(calamares.SHELLPROCESS_CONF_TARGET_PATH)
         plan.layers[0].exclude_patterns.append(calamares.SHELLPROCESS_CLEANUP_CONF_TARGET_PATH)
 
@@ -228,10 +249,6 @@ def cmd_create(args: argparse.Namespace) -> int:
     splash_source = constants.IMAGES_DIR / "splash.png"
     has_splash = splash_source.exists()
     splash_dest = iso_root / "boot" / "grub" / "splash.png"
-    # Computed once, up front (not inside normalize_splash()) so both the
-    # dry-run preview below and the real build further down use the exact
-    # same overlay color without running magick's palette extraction twice.
-    splash_overlay_color = grubcfg.darkest_color(grubcfg.extract_palette(splash_source)) if has_splash else None
 
     branding = calamares.load_branding() if args.mode == "reset" else None
 
@@ -239,6 +256,7 @@ def cmd_create(args: argparse.Namespace) -> int:
         layer.name: squashfs.build_command(
             [layer.source], layer_dest[layer.name], exclude_files[layer.name], cfg.compression, cfg.compression_level,
             pseudo_files=unpackfs_pseudo if layer.name == "rootfs" else None,
+            pseudo_file_list=skel_pseudo_file_path if layer.name == "rootfs" else None,
         )
         for layer in plan.layers
     }
@@ -269,9 +287,7 @@ def cmd_create(args: argparse.Namespace) -> int:
     for cmd in initramfs_cmds:
         print(f"initramfs:   {' '.join(str(c) for c in cmd)}")
     if has_splash:
-        splash_cmd = grubcfg.build_splash_command(
-            splash_source, splash_dest, splash_overlay_color, fraction=cfg.splash_overlay_fraction
-        )
+        splash_cmd = grubcfg.build_splash_command(splash_source, splash_dest)
         print(f"splash:      {' '.join(str(c) for c in splash_cmd)}")
     else:
         print(f"splash:      none configured ({splash_source} not found) -- plain grub boot menu")
@@ -385,10 +401,27 @@ def cmd_create(args: argparse.Namespace) -> int:
     )
     initcpio_override_path.write_text(calamares.INITCPIO_CONF_OVERRIDE)
     services_override_path.write_text(calamares.SERVICES_CONF_OVERRIDE)
+    if args.mode == "preserving":
+        # Both calamares.CALAMARES_SETTINGS_FILE (missing if calamares
+        # itself isn't installed -- it's OPTIONAL_TOOLS, only warned about
+        # by `doctor`, never required) and seed.etc_skel_pseudo_specs()
+        # (missing vendored mabox-skel) can raise here; remove_users_step()
+        # can also raise ValueError if its anchor line is ever missing.
+        # Same catch-and-report pattern as overlay.build_overlay() above --
+        # by this point the build has already required root and wiped the
+        # previous workdir, so a raw traceback here would be a much worse
+        # experience than the same "error: ...; return 1" every other
+        # failure in this function already gets.
+        try:
+            settings_text = calamares.remove_users_step(constants.CALAMARES_SETTINGS_FILE.read_text())
+            if cfg.encrypt:
+                settings_text = calamares.insert_live_source_job(settings_text)
+            settings_conf_path.write_text(settings_text)
+            skel_pseudo_file_path.write_text("\n".join(seed.etc_skel_pseudo_specs()) + "\n")
+        except (FileNotFoundError, ValueError) as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 1
     if cfg.encrypt:
-        settings_conf_path.write_text(
-            calamares.insert_live_source_job(constants.CALAMARES_SETTINGS_FILE.read_text())
-        )
         shellprocess_conf_path.write_text(calamares.build_shellprocess_remount_conf())
         shellprocess_cleanup_conf_path.write_text(calamares.build_shellprocess_cleanup_conf())
 
@@ -398,6 +431,7 @@ def cmd_create(args: argparse.Namespace) -> int:
         squashfs.build(
             [layer.source], layer_dest[layer.name], exclude_files[layer.name], cfg.compression, cfg.compression_level,
             pseudo_files=unpackfs_pseudo if layer.name == "rootfs" else None,
+            pseudo_file_list=skel_pseudo_file_path if layer.name == "rootfs" else None,
         )
         if cfg.encrypt and layer.name == "rootfs":
             luks.encrypt_squashfs(layer_dest[layer.name], layer_luks_dest[layer.name], passphrase)
@@ -413,9 +447,7 @@ def cmd_create(args: argparse.Namespace) -> int:
         isobuild.build_initramfs(kvers[k.name], mkinitcpio_conf, iso_root / "boot" / f"initramfs-{k.name}.img")
 
     if has_splash:
-        grubcfg.normalize_splash(
-            splash_source, splash_dest, splash_overlay_color, fraction=cfg.splash_overlay_fraction
-        )
+        grubcfg.normalize_splash(splash_source, splash_dest)
 
     grub_cfg_dest = iso_root / "boot" / "grub" / "grub.cfg"
     grub_cfg_dest.parent.mkdir(parents=True, exist_ok=True)

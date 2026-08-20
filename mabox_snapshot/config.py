@@ -29,7 +29,6 @@ class SnapshotConfig:
     encrypt: bool = False
     backup_destinations: tuple[str, ...] = ()
     profile: str = "full"
-    splash_overlay_fraction: float = 0.18
 
 
 def _load_toml(path: Path) -> dict:

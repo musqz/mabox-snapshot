@@ -59,3 +59,23 @@ def test_build_command_includes_pseudo_file_specs_when_given():
 def test_build_command_omits_pseudo_flags_when_none():
     cmd = squashfs.build_command(["/a"], "/out.sfs", None, "zstd", None)
     assert "-p" not in cmd
+
+
+def test_build_command_includes_pseudo_file_list_when_given():
+    cmd = squashfs.build_command(["/a"], "/out.sfs", None, "zstd", None, pseudo_file_list="/work/skel-pseudo.list")
+    assert cmd[-2:] == ["-pf", "/work/skel-pseudo.list"]
+
+
+def test_build_command_omits_pseudo_file_list_flag_when_none():
+    cmd = squashfs.build_command(["/a"], "/out.sfs", None, "zstd", None)
+    assert "-pf" not in cmd
+
+
+def test_build_command_combines_p_specs_and_pf_list():
+    cmd = squashfs.build_command(
+        ["/a"], "/out.sfs", None, "zstd", None,
+        pseudo_files=["etc/foo f 644 0 0 cat /bar"],
+        pseudo_file_list="/work/skel-pseudo.list",
+    )
+    assert "-p" in cmd and "etc/foo f 644 0 0 cat /bar" in cmd
+    assert cmd[-2:] == ["-pf", "/work/skel-pseudo.list"]

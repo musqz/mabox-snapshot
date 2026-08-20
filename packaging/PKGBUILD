@@ -1,6 +1,10 @@
 # Maintainer: musqz
 pkgname=mabox-snapshot-git
+<<<<<<< HEAD
 pkgver=r75.ba3cf52
+=======
+pkgver=r81.070a9fa
+>>>>>>> 3b08d9425e86bcdb5d01250b85fd839be0f05b35
 pkgrel=1
 pkgdesc="Snapshot a running Mabox Linux system into a bootable live/install ISO"
 arch=('any')
@@ -58,6 +62,13 @@ package() {
     mkdir -p "$pkgdir/usr/share/mabox-snapshot/mabox-skel"
     cp -a configs/mabox-skel/skel "$pkgdir/usr/share/mabox-snapshot/mabox-skel/skel"
 
+    # The umask-safety chmod pass below flattens every file to 644 --
+    # capture which vendored skel files are meant to stay executable
+    # (tint2's Executor plugin runs some of these directly, e.g.
+    # .config/tint2/scripts/*) from the source tree now, before that
+    # information is lost, and restore it after.
+    mabox_skel_exec_files=$(find configs/mabox-skel/skel -type f -perm -u+x -printf '%P\n')
+
     install -Dm644 configs/initcpio/hooks/miso_luks \
         "$pkgdir/usr/lib/initcpio/hooks/miso_luks"
     install -Dm644 configs/initcpio/install/miso_luks \
@@ -76,4 +87,7 @@ package() {
     find "$pkgdir" -type d -exec chmod 755 {} +
     find "$pkgdir" -type f -exec chmod 644 {} +
     find "$pkgdir/usr/bin" -type f -exec chmod 755 {} + 2>/dev/null || true
+    while IFS= read -r rel; do
+        [ -n "$rel" ] && chmod 755 "$pkgdir/usr/share/mabox-snapshot/mabox-skel/skel/$rel"
+    done <<< "$mabox_skel_exec_files"
 }
