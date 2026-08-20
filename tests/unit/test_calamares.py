@@ -222,6 +222,43 @@ def test_insert_live_source_job_raises_when_sequence_key_missing():
         calamares.insert_live_source_job("exec:\n  - unpackfs\n")
 
 
+def test_remove_users_step_removes_both_show_and_exec_occurrences():
+    settings = (
+        "sequence:\n"
+        "- show:\n"
+        "  - welcome\n"
+        "  - users\n"
+        "  - summary\n"
+        "- exec:\n"
+        "  - unpackfs\n"
+        "  - users\n"
+        "  - displaymanager\n"
+    )
+    result = calamares.remove_users_step(settings)
+    assert "- users" not in result
+    # everything else survives untouched
+    assert "- welcome" in result
+    assert "- summary" in result
+    assert "- unpackfs" in result
+    assert "- displaymanager" in result
+
+
+def test_remove_users_step_raises_when_users_missing():
+    with pytest.raises(ValueError):
+        calamares.remove_users_step("sequence:\n- exec:\n  - unpackfs\n")
+
+
+def test_remove_users_step_does_not_match_a_users_line_with_trailing_content():
+    """Regression guard for the anchor: a line that merely starts with
+    '- users' but has real content after it (e.g. a future instance-style
+    '- users: something') is not a bare account-creation step and must be
+    left alone -- and since that's the only 'users' text in this fixture,
+    remove_users_step() has nothing bare to remove and must raise, not
+    silently strip just the '- users' prefix and corrupt the line."""
+    with pytest.raises(ValueError):
+        calamares.remove_users_step("sequence:\n- exec:\n  - users: something\n  - unpackfs\n")
+
+
 def test_unpackfs_pseudo_specs_declares_parent_dirs_before_the_file():
     specs = calamares.unpackfs_pseudo_specs(
         "/work/unpackfs.conf", "/work/initcpio-override.conf", "/work/services-override.conf"
@@ -274,6 +311,22 @@ def test_unpackfs_pseudo_specs_encrypt_true_injects_settings_and_shellprocess():
     assert shellprocess_spec.endswith("/work/shellprocess-remount.conf")
     cleanup_spec = next(s for s in specs if s.startswith(calamares.SHELLPROCESS_CLEANUP_CONF_TARGET_PATH))
     assert cleanup_spec.endswith("/work/shellprocess-cleanup.conf")
+
+
+def test_unpackfs_pseudo_specs_settings_conf_injected_without_encrypt():
+    """Every preserving-mode build needs its own settings.conf (to remove
+    the users step, see remove_users_step()) even when --encrypt isn't
+    used at all -- settings_conf_path must not be gated behind encrypt."""
+    specs = calamares.unpackfs_pseudo_specs(
+        "/work/unpackfs.conf",
+        "/work/initcpio-override.conf",
+        "/work/services-override.conf",
+        settings_conf_path="/work/settings-preserving.conf",
+    )
+    assert len(specs) == 6
+    settings_spec = next(s for s in specs if s.startswith(calamares.SETTINGS_CONF_TARGET_PATH))
+    assert settings_spec.endswith("/work/settings-preserving.conf")
+    assert not any(s.startswith(calamares.SHELLPROCESS_CONF_TARGET_PATH) for s in specs)
 
 
 def test_initcpio_conf_override_regenerates_every_preset():
