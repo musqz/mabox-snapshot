@@ -51,6 +51,16 @@ def check_miso_hooks_installed(
         )
 
 
+def check_miso_hook_binaries_installed(binaries: list[str] = constants.MISO_EXTERNAL_BINARIES) -> None:
+    missing = [b for b in binaries if shutil.which(b) is None]
+    if missing:
+        raise FileNotFoundError(
+            "missing binary(ies) required by the live-boot initramfs hooks: "
+            + ", ".join(missing)
+            + " -- install nbd and/or curl (pacman -S nbd curl)"
+        )
+
+
 def build_initramfs(kver: str, conf_path: Path, dest: Path) -> None:
     subprocess.run(build_mkinitcpio_command(kver, conf_path, dest), check=True)
 

@@ -14,6 +14,8 @@ depends=(
     'mkinitcpio'
     'mkinitcpio-nfs-utils'
     'manjaro-tools-iso-git'
+    'nbd'
+    'curl'
     'dosfstools'
     'rsync'
     'openssl'

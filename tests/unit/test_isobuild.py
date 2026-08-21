@@ -60,3 +60,20 @@ def test_check_miso_hooks_installed_passes_when_present_in_any_search_dir(tmp_pa
     (second_dir / "miso_kms").write_text("# hook")
 
     isobuild.check_miso_hooks_installed(["miso", "miso_kms"], [first_dir, second_dir])  # must not raise
+
+
+def test_check_miso_hook_binaries_installed_raises_when_missing(monkeypatch):
+    monkeypatch.setattr(isobuild.shutil, "which", lambda _b: None)
+    with pytest.raises(FileNotFoundError, match="nbd and/or curl"):
+        isobuild.check_miso_hook_binaries_installed(["nbd-client"])
+
+
+def test_check_miso_hook_binaries_installed_lists_each_missing_binary(monkeypatch):
+    monkeypatch.setattr(isobuild.shutil, "which", lambda _b: None)
+    with pytest.raises(FileNotFoundError, match="curl, nbd-client"):
+        isobuild.check_miso_hook_binaries_installed(["curl", "nbd-client"])
+
+
+def test_check_miso_hook_binaries_installed_passes_when_present(monkeypatch):
+    monkeypatch.setattr(isobuild.shutil, "which", lambda b: f"/usr/bin/{b}")
+    isobuild.check_miso_hook_binaries_installed(["curl", "nbd-client"])  # must not raise
