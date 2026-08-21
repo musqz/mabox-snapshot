@@ -158,13 +158,20 @@ MISO_LUKS_HOOK_INSTALLED = Path("/usr/lib/initcpio/hooks/miso_luks")
 # (see SOURCES.md). Missing on a host without it, so build_initramfs() would
 # otherwise fail deep inside mkinitcpio -- after the expensive mksquashfs
 # step -- with a bare CalledProcessError instead of a clear message.
-# mkinitcpio itself resolves each hook name by searching /etc/initcpio then
-# /usr/lib/initcpio, in that order, so either counts as "installed".
+# Checked against install/, not hooks/: mkinitcpio's own run_build_hook()
+# (see /usr/lib/initcpio/functions) resolves a hook by searching ONLY
+# $_d_install ("/etc/initcpio/install:/usr/lib/initcpio/install" by
+# default) for a same-named install script -- that's the literal source of
+# its "Hook 'X' cannot be found" error. The separate hooks/ runtime script
+# is optional and install-only hooks are normal (miso_kms is one: it just
+# loads DRM/KMS modules early, no runtime action needed, same shape as
+# mkinitcpio's own stock "kms" hook) -- checking hooks/ instead produced a
+# false "missing" for miso_kms on a host where it was correctly installed.
 MISO_EXTERNAL_HOOKS = [
     "miso", "miso_shutdown", "miso_loop_mnt", "miso_pxe_common",
     "miso_pxe_http", "miso_pxe_nbd", "miso_pxe_nfs", "miso_kms",
 ]
-MISO_HOOK_SEARCH_DIRS = [Path("/etc/initcpio/hooks"), Path("/usr/lib/initcpio/hooks")]
+MISO_HOOK_SEARCH_DIRS = [Path("/etc/initcpio/install"), Path("/usr/lib/initcpio/install")]
 
 # Deliberately different from the plaintext "rootfs.sfs" name so the boot
 # hook can unambiguously tell, from the filename alone, which case it's in.
