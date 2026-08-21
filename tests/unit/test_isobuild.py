@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from mabox_snapshot import isobuild
 
 
@@ -37,3 +39,24 @@ def test_build_xorriso_command_references_boot_files():
     assert str(Path("/iso/efi.img")) in cmd
     assert cmd[-1] == "/iso/"
     assert cmd[cmd.index("-o") + 1] == "/out/mabox.iso"
+
+
+def test_check_miso_hooks_installed_raises_when_missing(tmp_path):
+    with pytest.raises(FileNotFoundError, match="manjaro-tools-iso-git"):
+        isobuild.check_miso_hooks_installed(["miso"], [tmp_path])
+
+
+def test_check_miso_hooks_installed_lists_each_missing_hook(tmp_path):
+    with pytest.raises(FileNotFoundError, match="miso_shutdown, miso_kms"):
+        isobuild.check_miso_hooks_installed(["miso_shutdown", "miso_kms"], [tmp_path])
+
+
+def test_check_miso_hooks_installed_passes_when_present_in_any_search_dir(tmp_path):
+    first_dir = tmp_path / "etc-initcpio-hooks"
+    second_dir = tmp_path / "usr-lib-initcpio-hooks"
+    first_dir.mkdir()
+    second_dir.mkdir()
+    (first_dir / "miso").write_text("# hook")
+    (second_dir / "miso_kms").write_text("# hook")
+
+    isobuild.check_miso_hooks_installed(["miso", "miso_kms"], [first_dir, second_dir])  # must not raise
