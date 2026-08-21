@@ -173,6 +173,18 @@ MISO_EXTERNAL_HOOKS = [
 ]
 MISO_HOOK_SEARCH_DIRS = [Path("/etc/initcpio/install"), Path("/usr/lib/initcpio/install")]
 
+# add_binary calls inside the miso hooks' own install scripts (see e.g.
+# /etc/initcpio/install/miso_pxe_http and .../miso_pxe_nbd) -- found by
+# reading every miso install script mkinitcpio actually runs. Neither
+# binary is pulled in by manjaro-tools-iso-git or anything else this
+# package depends on (that package ships the install SCRIPTS, not what
+# they shell out to at build time), so a host missing either one hits
+# mkinitcpio's own "binary not found" error deep inside
+# build_initramfs() -- after the expensive mksquashfs step, same failure
+# mode MISO_EXTERNAL_HOOKS above already guards against for the hook
+# scripts themselves. curl -> miso_pxe_http, nbd-client -> miso_pxe_nbd.
+MISO_EXTERNAL_BINARIES = ["curl", "nbd-client"]
+
 # Deliberately different from the plaintext "rootfs.sfs" name so the boot
 # hook can unambiguously tell, from the filename alone, which case it's in.
 LUKS_CONTAINER_SUFFIX = ".luks"
