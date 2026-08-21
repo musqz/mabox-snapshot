@@ -152,6 +152,20 @@ MKINITCPIO_MISO_LUKS_HOOKS = [
 # precedent as seed.py's MABOX_SKEL_DIR check).
 MISO_LUKS_HOOK_INSTALLED = Path("/usr/lib/initcpio/hooks/miso_luks")
 
+# Everything MKINITCPIO_MISO_HOOKS/MKINITCPIO_MISO_LUKS_HOOKS reference that
+# isn't a stock mkinitcpio hook and isn't miso_luks (vendored above): comes
+# from manjaro-tools-iso-git, which packaging/PKGBUILD does NOT depend on
+# (see SOURCES.md). Missing on a host without it, so build_initramfs() would
+# otherwise fail deep inside mkinitcpio -- after the expensive mksquashfs
+# step -- with a bare CalledProcessError instead of a clear message.
+# mkinitcpio itself resolves each hook name by searching /etc/initcpio then
+# /usr/lib/initcpio, in that order, so either counts as "installed".
+MISO_EXTERNAL_HOOKS = [
+    "miso", "miso_shutdown", "miso_loop_mnt", "miso_pxe_common",
+    "miso_pxe_http", "miso_pxe_nbd", "miso_pxe_nfs", "miso_kms",
+]
+MISO_HOOK_SEARCH_DIRS = [Path("/etc/initcpio/hooks"), Path("/usr/lib/initcpio/hooks")]
+
 # Deliberately different from the plaintext "rootfs.sfs" name so the boot
 # hook can unambiguously tell, from the filename alone, which case it's in.
 LUKS_CONTAINER_SUFFIX = ".luks"

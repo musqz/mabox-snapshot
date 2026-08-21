@@ -312,6 +312,12 @@ def cmd_create(args: argparse.Namespace) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 1
 
+    try:
+        isobuild.check_miso_hooks_installed()
+    except FileNotFoundError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+
     passphrase = None
     if cfg.encrypt:
         try:

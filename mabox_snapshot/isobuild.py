@@ -38,6 +38,19 @@ def build_mkinitcpio_command(kver: str, conf_path: Path, dest: Path) -> list[str
     return ["mkinitcpio", "-k", kver, "-c", str(conf_path), "-g", str(dest)]
 
 
+def check_miso_hooks_installed(
+    hooks: list[str] = constants.MISO_EXTERNAL_HOOKS,
+    search_dirs: list[Path] = constants.MISO_HOOK_SEARCH_DIRS,
+) -> None:
+    missing = [h for h in hooks if not any((d / h).exists() for d in search_dirs)]
+    if missing:
+        raise FileNotFoundError(
+            "missing mkinitcpio hook(s) required for the live-boot initramfs: "
+            + ", ".join(missing)
+            + " -- install manjaro-tools-iso-git (pacman -S manjaro-tools-iso-git)"
+        )
+
+
 def build_initramfs(kver: str, conf_path: Path, dest: Path) -> None:
     subprocess.run(build_mkinitcpio_command(kver, conf_path, dest), check=True)
 

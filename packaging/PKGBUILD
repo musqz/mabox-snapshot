@@ -13,6 +13,7 @@ depends=(
     'grub'
     'mkinitcpio'
     'mkinitcpio-nfs-utils'
+    'manjaro-tools-iso-git'
     'dosfstools'
     'rsync'
     'openssl'
