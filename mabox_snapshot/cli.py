@@ -148,7 +148,11 @@ def cmd_create(args: argparse.Namespace) -> int:
         )
     plan.layers[0].exclude_patterns = list(dict.fromkeys(plan.layers[0].exclude_patterns))
 
-    stamp = datetime.now().strftime("%Y-%m" if cfg.month else "%Y-%m-%d-%H%M")
+    # Day-month-year (European convention), not ISO 8601 year-first order --
+    # list_history()/latest() sort by each manifest's own stored timestamp
+    # field, not this filename, precisely so this display format is free to
+    # not be lexicographically sortable (see history.py).
+    stamp = datetime.now().strftime("%m-%Y" if cfg.month else "%d-%m-%Y-%H%M")
     iso_name = args.iso_name or f"{constants.ISO_NAME_PREFIX}{args.mode}-{stamp}"
     dest = output_dir / f"{iso_name}.iso"
 
