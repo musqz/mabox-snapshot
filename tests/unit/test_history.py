@@ -108,6 +108,20 @@ def test_write_manifest_round_trip(tmp_path):
     assert record.entries == history.scan_home_entries(home)
 
 
+def test_write_manifest_uses_explicit_timestamp_when_given(tmp_path):
+    home = tmp_path / "home"
+    home.mkdir()
+    history_dir = tmp_path / "history"
+
+    history.write_manifest(
+        tmp_path / "a.iso", "preserving", history_dir=history_dir, home=home,
+        timestamp="2026-08-01T10:00:00",
+    )
+
+    [record] = history.list_history(history_dir)
+    assert record.timestamp == "2026-08-01T10:00:00"
+
+
 def test_write_manifest_uses_precomputed_entries_without_scanning(tmp_path):
     history_dir = tmp_path / "history"
     dest = tmp_path / "mabox-preserving-2026-08-17-1432.iso"
@@ -164,15 +178,25 @@ def test_list_history_sorted_oldest_first(tmp_path):
     home = tmp_path / "home"
     home.mkdir()
     history_dir = tmp_path / "history"
-    for stamp in ["2026-08-17-0900", "2026-08-01-1000", "2026-08-15-1200"]:
-        history.write_manifest(tmp_path / f"mabox-preserving-{stamp}.iso", "preserving", history_dir=history_dir, home=home)
+    # Filenames are deliberately in an order that would sort WRONG if
+    # list_history() relied on filename order -- the day-first display
+    # stamp (see cli.py) isn't lexicographically sortable across a month
+    # boundary. Each manifest's own `timestamp` (ISO 8601, real
+    # chronological order below) is what list_history() actually sorts by.
+    fixtures = [
+        ("mabox-preserving-01-09-2026-1000.iso", "2026-09-01T10:00:00"),
+        ("mabox-preserving-15-08-2026-1200.iso", "2026-08-15T12:00:00"),
+        ("mabox-preserving-17-08-2026-0900.iso", "2026-08-17T09:00:00"),
+    ]
+    for name, timestamp in fixtures:
+        history.write_manifest(tmp_path / name, "preserving", history_dir=history_dir, home=home, timestamp=timestamp)
 
     records = history.list_history(history_dir)
 
     assert [r.iso for r in records] == [
-        "mabox-preserving-2026-08-01-1000.iso",
-        "mabox-preserving-2026-08-15-1200.iso",
-        "mabox-preserving-2026-08-17-0900.iso",
+        "mabox-preserving-15-08-2026-1200.iso",
+        "mabox-preserving-17-08-2026-0900.iso",
+        "mabox-preserving-01-09-2026-1000.iso",
     ]
 
 
@@ -180,8 +204,11 @@ def test_latest_returns_last_n_oldest_first(tmp_path):
     home = tmp_path / "home"
     home.mkdir()
     history_dir = tmp_path / "history"
-    for name in ["a", "b", "c"]:
-        history.write_manifest(tmp_path / f"{name}.iso", "preserving", history_dir=history_dir, home=home)
+    for i, name in enumerate(["a", "b", "c"]):
+        history.write_manifest(
+            tmp_path / f"{name}.iso", "preserving", history_dir=history_dir, home=home,
+            timestamp=f"2026-08-{i + 1:02d}T00:00:00",
+        )
 
     records = history.latest(2, history_dir)
 
@@ -201,8 +228,11 @@ def test_latest_default_n_is_two(tmp_path):
     home = tmp_path / "home"
     home.mkdir()
     history_dir = tmp_path / "history"
-    for name in ["a", "b", "c"]:
-        history.write_manifest(tmp_path / f"{name}.iso", "preserving", history_dir=history_dir, home=home)
+    for i, name in enumerate(["a", "b", "c"]):
+        history.write_manifest(
+            tmp_path / f"{name}.iso", "preserving", history_dir=history_dir, home=home,
+            timestamp=f"2026-08-{i + 1:02d}T00:00:00",
+        )
 
     assert len(history.latest(history_dir=history_dir)) == 2
 

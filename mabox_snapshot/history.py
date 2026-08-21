@@ -80,6 +80,7 @@ def write_manifest(
     history_dir: Path = constants.HISTORY_DIR,
     home: Path | None = None,
     entries: list[HistoryEntry] | None = None,
+    timestamp: str | None = None,
 ) -> Path:
     """Writes history_dir/{dest.stem}.toml recording the top-level home-dir
     entries at the time of a successful `create` run. Reusing the ISO's own
@@ -89,14 +90,16 @@ def write_manifest(
     privilege.resolve_home_dir(); tests pass it explicitly to bypass
     SUDO_USER entirely. `entries` lets a caller that already scanned home
     (e.g. cli.py's change-notification pass) pass that scan straight through
-    instead of paying for a second walk of the same tree."""
+    instead of paying for a second walk of the same tree. `timestamp`
+    defaults to datetime.now(); tests pass it explicitly for deterministic,
+    collision-free ordering in list_history()/latest()."""
     if entries is None:
         if home is None:
             home = privilege.resolve_home_dir()
         entries = scan_home_entries(home)
 
     record = HistoryRecord(
-        timestamp=datetime.now().isoformat(timespec="seconds"),
+        timestamp=timestamp or datetime.now().isoformat(timespec="seconds"),
         mode=mode,
         iso=dest.name,
         entries=entries,
@@ -119,12 +122,16 @@ def _parse_record(path: Path) -> HistoryRecord:
 
 
 def list_history(history_dir: Path = constants.HISTORY_DIR) -> list[HistoryRecord]:
-    """All stored manifests, oldest first (filename sort order matches
-    chronological order, since filenames derive from the ISO's own
-    timestamp-based stamp)."""
+    """All stored manifests, oldest first. Sorted by each record's own
+    stored `timestamp` field, not by manifest filename -- the filename
+    derives from the ISO's own display-oriented stamp (day-month-year,
+    European convention; see cli.py), which is deliberately NOT
+    lexicographically sortable, unlike the ISO 8601 `timestamp` field
+    written by write_manifest()."""
     if not history_dir.exists():
         return []
-    return [_parse_record(p) for p in sorted(history_dir.glob("*.toml"))]
+    records = [_parse_record(p) for p in history_dir.glob("*.toml")]
+    return sorted(records, key=lambda r: datetime.fromisoformat(r.timestamp))
 
 
 def latest(n: int = 2, history_dir: Path = constants.HISTORY_DIR) -> list[HistoryRecord]:
