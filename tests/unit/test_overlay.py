@@ -1,8 +1,10 @@
+import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
-from mabox_snapshot import overlay, squashfs
+from mabox_snapshot import excludes, overlay, squashfs
 
 
 @pytest.fixture(autouse=True)
@@ -29,14 +31,38 @@ def test_resolve_plan_preserving_has_single_rootfs_layer(tmp_path):
 
 
 def test_resolve_plan_rootfs_layer_includes_foreign_mount_excludes(tmp_path, monkeypatch):
+    # detect_foreign_mount_excludes() classifies by real os.stat().st_dev,
+    # not just by presence in the mounts file (see its own docstring). The
+    # fake mount below is deliberately a tmp_path-derived path, never a
+    # hardcoded real-looking one (e.g. "/mount/data_opslag") -- a hardcoded
+    # absolute path can coincidentally already exist on whatever host runs
+    # the suite (it does on at least one real Mabox install, which is what
+    # originally surfaced this test as flaky), silently changing the
+    # os.stat() result underneath the mock. resolve_plan() always checks
+    # against the real "/" (it has no root override -- by design, since
+    # this tool only ever snapshots the live host), so root itself can't
+    # be faked the same way; only the mountpoint needs to be.
     exclude_list = tmp_path / "excludes.list"
     exclude_list.write_text("")
+    fake_mount = tmp_path / "fake-foreign-mount"
     mounts = tmp_path / "mounts"
-    mounts.write_text(f"/dev/sdb1 /mount/data_opslag ext4 rw 0 0\n")
+    mounts.write_text(f"/dev/sdb1 {fake_mount} ext4 rw 0 0\n")
+
+    real_stat = os.stat
+    devs = {"/": 1, str(fake_mount): 2}  # a genuinely separate volume
+
+    def fake_stat(path, *args, **kwargs):
+        key = str(path)
+        if key in devs:
+            return SimpleNamespace(st_dev=devs[key])
+        return real_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(excludes.os, "stat", fake_stat)
 
     plan = overlay.resolve_plan("preserving", tmp_path / "work", exclude_list, mounts_file=mounts)
 
-    assert "mount/data_opslag/*" in plan.layers[0].exclude_patterns
+    expected_pattern = f"{fake_mount.relative_to('/')}/*"
+    assert expected_pattern in plan.layers[0].exclude_patterns
 
 
 def test_resolve_plan_deduplicates_across_exclude_sources(tmp_path):
