@@ -1,14 +1,15 @@
 # mabox-snapshot
 
-# [BETA]
+# [First Release]
 
+![Release](https://img.shields.io/github/v/release/musqz/mabox-snapshot.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Mabox%20Linux-2f4f4f.svg)
 
 Snapshot a running [Mabox Linux](https://maboxlinux.org/) system into a bootable live/install ISO. Mabox-only, Python, CLI-only — modeled on MX Linux's `mx-snapshot`, not a port of it.
 
-**Status:** the build pipeline is complete for both modes. Preserving-mode installs — `--encrypt` included — have been verified end to end in a real VM: Calamares installs without prompting for a new account and completes cleanly. See [Recent changes](#recent-changes) below.
+**Status:** the build pipeline is complete for both modes. Preserving-mode installs — `--encrypt` included — have been verified end to end in a real VM: Calamares installs without prompting for a new account and completes cleanly. See [CHANGELOG.md](CHANGELOG.md) for the full history.
 
 ## Two modes
 
@@ -16,13 +17,6 @@ Snapshot a running [Mabox Linux](https://maboxlinux.org/) system into a bootable
 - **`reset`** — a sanitized ISO for sharing: a synthetic `demo`/`demo` account replaces the real user, no real `/home`, no saved network credentials, no machine ID.
 
 Both modes support a user-editable exclude list (`excludes add/remove/edit`), plus ordered `excludes rules add exclude/include ...` overrides for keeping one specific subpath inside an otherwise-excluded directory (e.g. one folder under `Documents`), so you control what's carried into the snapshot beyond the defaults. `--profile {full,lean}` trades completeness for a smaller/faster build; `mabox-snapshot skel audit` shows which of your desktop config differs from Mabox's shipped defaults, to help decide what's worth protecting in a leaner profile.
-
-## Recent changes
-
-- **Preserving-mode account handling fixed.** Calamares runs its `- users` step before `- grubcfg`/`- bootloader`; if the install-time username collided with an account already in the snapshot — near-certain, since testers naturally type their own name — `useradd` aborted the install before the bootloader ever ran. Preserving mode's whole premise is "this is already your account," so account creation is now skipped outright, and `/etc/skel` is seeded for the account that's already there.
-- **`--encrypt` hardened.** The decrypted live-session rootfs is now remounted immediately before Calamares reads it and closed again right after, instead of relying on a mount that could silently go empty mid-install or leave a crypto device open through the bootloader step (which was quietly breaking UEFI boot-entry creation).
-- **Foreign boot artifacts excluded.** The source machine's own EFI System Partition contents, foreign mounts, and pseudo-filesystems are now excluded from the snapshot layer, so a build never carries over hardware-specific boot state that doesn't belong on the target.
-- **GRUB polish.** A proper font ships so the GRUB menu border renders correctly, and the splash image's border was simplified to a plain top/bottom fade.
 
 ## Why not just use `mx-snapshot`?
 
@@ -38,7 +32,7 @@ cd mabox-snapshot/packaging
 makepkg -si
 ```
 
-This builds `mabox-snapshot-git` from `packaging/PKGBUILD` and installs it via `pacman -U`. Runtime dependencies (`squashfs-tools`, `grub`, `mkinitcpio`, `libisoburn`, `dosfstools`, `rsync`, `openssl`) are pulled in automatically. `calamares` is an optional dependency — only needed if the produced ISO will be installed *from*, not just booted live; `cryptsetup` is optional too, needed only for `--encrypt` builds.
+This builds `mabox-snapshot` from `packaging/PKGBUILD` and installs it via `pacman -U`. Runtime dependencies (`squashfs-tools`, `grub`, `mkinitcpio`, `libisoburn`, `dosfstools`, `rsync`, `openssl`) are pulled in automatically. `calamares` is an optional dependency — only needed if the produced ISO will be installed *from*, not just booted live; `cryptsetup` is optional too, needed only for `--encrypt` builds.
 
 ## Quick start
 
