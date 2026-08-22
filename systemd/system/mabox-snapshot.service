@@ -7,9 +7,8 @@ ConditionACPower=true
 Type=oneshot
 # --mode preserving only: this is unattended personal-backup automation,
 # not the sharing/reset workflow. --encrypt is never passed here -- its
-# passphrase prompt requires a real terminal by design (see luks.py) and
-# would fail every unattended run; a --backup-to config value covers the
-# "protect this off the local disk" use case instead.
+# passphrase prompt requires a real terminal by design (see luks.py), which
+# an unattended timer doesn't have.
 ExecStart=/usr/bin/mabox-snapshot create --mode preserving
 Nice=19
 IOSchedulingClass=idle
