@@ -30,7 +30,7 @@ cd mabox-snapshot/packaging
 makepkg -si
 ```
 
-This builds `mabox-snapshot` from `packaging/PKGBUILD` and installs it via `pacman -U`. Runtime dependencies (`squashfs-tools`, `grub`, `mkinitcpio`, `libisoburn`, `dosfstools`, `rsync`, `openssl`) are pulled in automatically. `calamares` is an optional dependency — only needed if the produced ISO will be installed *from*, not just booted live; `cryptsetup` is optional too, needed only for `--encrypt` builds.
+Runtime dependencies (`squashfs-tools`, `grub`, `mkinitcpio`, `libisoburn`, `dosfstools`, `rsync`, `openssl`) are pulled in automatically. `calamares` is an optional dependency — only needed if the produced ISO will be installed *from*, not just booted live; `cryptsetup` is optional too, needed only for `--encrypt` builds.
 
 ## Quick start
 
