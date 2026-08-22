@@ -10,7 +10,7 @@ from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
-from . import backup, calamares, changes, config, constants, excludes, grubcfg, history, isobuild, kernels, luks, overlay, packages, permissions, privilege, profiles, retention, seed, skelaudit, squashfs
+from . import calamares, changes, config, constants, excludes, grubcfg, history, isobuild, kernels, luks, overlay, packages, permissions, privilege, profiles, retention, seed, skelaudit, squashfs
 from . import workdir as workdir_mod
 from . import __version__
 
@@ -76,18 +76,12 @@ def _apply_create_overrides(cfg: config.SnapshotConfig, args: argparse.Namespace
         overrides["all_kernels"] = True
     if args.skip_space_check:
         overrides["skip_space_check"] = True
-    if args.keep_workdir:
-        overrides["keep_workdir"] = True
-    if args.month:
-        overrides["month"] = True
     if args.max_age_days is not None:
         overrides["max_age_days"] = args.max_age_days
     if args.change_threshold_mb is not None:
         overrides["change_threshold_mb"] = args.change_threshold_mb
     if args.encrypt:
         overrides["encrypt"] = True
-    if args.backup_to:
-        overrides["backup_destinations"] = tuple(args.backup_to)
     if args.profile is not None:
         overrides["profile"] = args.profile
     return replace(cfg, **overrides)
@@ -152,7 +146,7 @@ def cmd_create(args: argparse.Namespace) -> int:
     # list_history()/latest() sort by each manifest's own stored timestamp
     # field, not this filename, precisely so this display format is free to
     # not be lexicographically sortable (see history.py).
-    stamp = datetime.now().strftime("%m-%Y" if cfg.month else "%d-%m-%Y-%H%M")
+    stamp = datetime.now().strftime("%d-%m-%Y-%H%M")
     iso_name = args.iso_name or f"{constants.ISO_NAME_PREFIX}{args.mode}-{stamp}"
     dest = output_dir / f"{iso_name}.iso"
 
@@ -305,7 +299,6 @@ def cmd_create(args: argparse.Namespace) -> int:
     print(f"bios boot:   {' '.join(str(c) for c in bios_cmd)}")
     print(f"efi boot:    {' '.join(str(c) for c in efi_cmd)}")
     print(f"assemble:    {' '.join(str(c) for c in xorriso_cmd)}")
-    print(f"backup:      {', '.join(cfg.backup_destinations) if cfg.backup_destinations else 'none configured'}")
 
     if args.dry_run:
         return 0
@@ -347,10 +340,7 @@ def cmd_create(args: argparse.Namespace) -> int:
     # isobuild.assemble() then grafts into the new ISO right alongside the
     # real content -- a real, observed bug: a stale encrypted rootfs.sfs.luks
     # left over from a previous --encrypt build nearly doubled a later
-    # unencrypted build's ISO size (61G stale + 37G real = 97G). Wiped
-    # unconditionally, regardless of --keep-workdir: that flag is about
-    # letting a user inspect what THIS build produced after it finishes, not
-    # about preserving a PREVIOUS build's now-irrelevant staged tree.
+    # unencrypted build's ISO size (61G stale + 37G real = 97G).
     workdir_mod.cleanup(iso_root)
     output_dir.mkdir(parents=True, exist_ok=True)
     for layer in plan.layers:
@@ -490,10 +480,6 @@ def cmd_create(args: argparse.Namespace) -> int:
     if cfg.max_age_days is not None:
         for removed in retention.prune_old_isos(output_dir, cfg.max_age_days):
             print(f"removed old snapshot: {removed}")
-
-    if cfg.backup_destinations:
-        for failed in backup.push_to_destinations(dest, cfg.backup_destinations):
-            print(f"warning: backup to {failed} failed", file=sys.stderr)
 
     print("note: boot this in a VM before trusting it -- BIOS+UEFI hybrid boot is not self-verifying.")
     return 0
@@ -674,7 +660,6 @@ def build_parser() -> argparse.ArgumentParser:
         "-o", "--skip-space-check", action="store_true",
         help="Skip the free-space precheck on workdir/output-dir before building",
     )
-    create_parser.add_argument("-m", "--month", action="store_true", help="Name the output by year-month instead of a full timestamp")
     create_parser.add_argument(
         "--output-dir", type=Path,
         help="Directory the finished ISO is written to (default: same as --workdir)",
@@ -708,16 +693,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Include every installed kernel instead of just the newest",
     )
     create_parser.add_argument("--dry-run", action="store_true", help="Print the resolved plan and command, execute nothing")
-    create_parser.add_argument(
-        "--keep-workdir", action="store_true",
-        help="No-op for now: post-build workdir cleanup isn't implemented yet, so build state under --workdir "
-             "is always kept after a successful build. Unaffected by this: the staged ISO tree from a "
-             "PREVIOUS build is always wiped before a new one starts, to avoid stale layer files leaking in",
-    )
     create_parser.add_argument("--max-age-days", type=int, help="Delete older mabox-*.iso files in the output dir after a successful build")
     create_parser.add_argument("--change-threshold-mb", type=int, help="Prompt about home-dir items new/grown by at least this many MiB since the last snapshot (default 200)")
     create_parser.add_argument("--encrypt", action="store_true", help="Encrypt rootfs.sfs with LUKS2 (preserving mode only; passphrase prompted interactively at build time)")
-    create_parser.add_argument("--backup-to", action="append", default=[], help="rsync the finished ISO here (local path or user@host:path); repeatable")
     create_parser.add_argument(
         "--profile", choices=list(profiles.PROFILES),
         help="Size/completeness tier: full (default, today's behavior) or lean (trims unselected kernels' "

@@ -85,8 +85,8 @@ def write_manifest(
     """Writes history_dir/{dest.stem}.toml recording the top-level home-dir
     entries at the time of a successful `create` run. Reusing the ISO's own
     filename stem (rather than a bare timestamp) means the manifest inherits
-    whatever mode-qualified, --month-aware naming/collision semantics the ISO
-    filename itself already has. `home` defaults to
+    whatever mode-qualified naming/collision semantics the ISO filename
+    itself already has. `home` defaults to
     privilege.resolve_home_dir(); tests pass it explicitly to bypass
     SUDO_USER entirely. `entries` lets a caller that already scanned home
     (e.g. cli.py's change-notification pass) pass that scan straight through
