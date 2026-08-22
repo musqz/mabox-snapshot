@@ -10,8 +10,7 @@ from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
-# removed backup
-from . import  calamares, changes, config, constants, excludes, grubcfg, history, isobuild, kernels, luks, overlay, packages, permissions, privilege, profiles, retention, seed, skelaudit, squashfs
+from . import backup, calamares, changes, config, constants, excludes, grubcfg, history, isobuild, kernels, luks, overlay, packages, permissions, privilege, profiles, retention, seed, skelaudit, squashfs
 from . import workdir as workdir_mod
 from . import __version__
 
@@ -711,11 +710,11 @@ def build_parser() -> argparse.ArgumentParser:
              "is always kept after a successful build. Unaffected by this: the staged ISO tree from a "
              "PREVIOUS build is always wiped before a new one starts, to avoid stale layer files leaking in",
     )
-    // create_parser.add_argument("--max-age-days", type=int, help="Delete older mabox-*.iso files in the output dir after a successful build")
+    create_parser.add_argument("--max-age-days", type=int, help="Delete older mabox-*.iso files in the output dir after a successful build")
     create_parser.add_argument("--change-threshold-mb", type=int, help="Prompt about home-dir items new/grown by at least this many MiB since the last snapshot (default 200)")
     create_parser.add_argument("--encrypt", action="store_true", help="Encrypt rootfs.sfs with LUKS2 (preserving mode only; passphrase prompted interactively at build time)")
-    // create_parser.add_argument("--backup-to", action="append", default=[], help="rsync the finished ISO here (local path or user@host:path); repeatable")
-    // create_parser.add_argument(
+    create_parser.add_argument("--backup-to", action="append", default=[], help="rsync the finished ISO here (local path or user@host:path); repeatable")
+    create_parser.add_argument(
         "--profile", choices=list(profiles.PROFILES),
         help="Size/completeness tier: full (default, today's behavior) or lean (trims unselected kernels' "
              "module trees plus VM/container storage; see 'mabox-snapshot skel audit' to curate further)",
