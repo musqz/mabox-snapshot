@@ -79,7 +79,6 @@ usage: mabox-snapshot create [-h] --mode {preserving,reset} [-w WORKDIR] [-o]
                               [--exclude-list EXCLUDE_LIST]
                               [--exclude-folder {Desktop,Documents,Downloads,Music,Pictures,Videos,Public,Templates}]
                               [--kernel KERNEL] [--all-kernels] [--dry-run]
-                              [--max-age-days MAX_AGE_DAYS]
                               [--change-threshold-mb CHANGE_THRESHOLD_MB]
                               [--encrypt]
                               [--profile {full,lean}]
@@ -107,11 +106,16 @@ options:
                         mabox-<mode>-<timestamp>)
   --compression {zstd,xz,lz4,lzo,gzip}
                         Squashfs compression algorithm passed to mksquashfs
-                        -comp (default: zstd)
+                        -comp (default: zstd, the best speed/ratio balance for
+                        most builds). xz compresses smallest but slowest; gzip
+                        is a universal fallback with a weaker ratio; lz4/lzo
+                        are fastest but produce the largest output
   --compression-level COMPRESSION_LEVEL
                         Compression level passed to mksquashfs -Xcompression-
-                        level (valid range depends on --compression; default:
-                        mksquashfs's own default)
+                        level. Only zstd (1-22, default 15), gzip (1-9,
+                        default 9), and lzo (1-9, default 8) support this --
+                        xz and lz4 have no such option in mksquashfs and will
+                        error if a level is given
   --exclude-list EXCLUDE_LIST
                         Path to a custom exclude-pattern file, replacing the
                         default list (default: /etc/mabox-
@@ -124,9 +128,6 @@ options:
   --all-kernels         Include every installed kernel instead of just the
                         newest
   --dry-run             Print the resolved plan and command, execute nothing
-  --max-age-days MAX_AGE_DAYS
-                        Delete older mabox-*.iso files in the output dir after
-                        a successful build
   --change-threshold-mb CHANGE_THRESHOLD_MB
                         Prompt about home-dir items new/grown by at least this
                         many MiB since the last snapshot (default 200)
