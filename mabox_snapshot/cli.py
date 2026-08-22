@@ -10,7 +10,7 @@ from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
-from . import calamares, changes, config, constants, excludes, grubcfg, history, isobuild, kernels, luks, overlay, packages, permissions, privilege, profiles, retention, seed, skelaudit, squashfs
+from . import calamares, changes, config, constants, excludes, grubcfg, history, isobuild, kernels, luks, overlay, packages, permissions, privilege, profiles, seed, skelaudit, squashfs
 from . import workdir as workdir_mod
 from . import __version__
 
@@ -76,8 +76,6 @@ def _apply_create_overrides(cfg: config.SnapshotConfig, args: argparse.Namespace
         overrides["all_kernels"] = True
     if args.skip_space_check:
         overrides["skip_space_check"] = True
-    if args.max_age_days is not None:
-        overrides["max_age_days"] = args.max_age_days
     if args.change_threshold_mb is not None:
         overrides["change_threshold_mb"] = args.change_threshold_mb
     if args.encrypt:
@@ -477,10 +475,6 @@ def cmd_create(args: argparse.Namespace) -> int:
     except Exception as e:
         print(f"warning: snapshot history not recorded: {e}", file=sys.stderr)
 
-    if cfg.max_age_days is not None:
-        for removed in retention.prune_old_isos(output_dir, cfg.max_age_days):
-            print(f"removed old snapshot: {removed}")
-
     print("note: boot this in a VM before trusting it -- BIOS+UEFI hybrid boot is not self-verifying.")
     return 0
 
@@ -670,11 +664,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     create_parser.add_argument(
         "--compression", choices=squashfs.SUPPORTED_COMPRESSORS,
-        help="Squashfs compression algorithm passed to mksquashfs -comp (default: zstd)",
+        help="Squashfs compression algorithm passed to mksquashfs -comp (default: zstd, the best speed/ratio "
+             "balance for most builds). xz compresses smallest but slowest; gzip is a universal fallback with "
+             "a weaker ratio; lz4/lzo are fastest but produce the largest output",
     )
     create_parser.add_argument(
         "--compression-level", type=int,
-        help="Compression level passed to mksquashfs -Xcompression-level (valid range depends on --compression; default: mksquashfs's own default)",
+        help="Compression level passed to mksquashfs -Xcompression-level. Only zstd (1-22, default 15), gzip "
+             "(1-9, default 9), and lzo (1-9, default 8) support this -- xz and lz4 have no such option in "
+             "mksquashfs and will error if a level is given",
     )
     create_parser.add_argument(
         "--exclude-list", type=Path,
@@ -693,7 +691,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Include every installed kernel instead of just the newest",
     )
     create_parser.add_argument("--dry-run", action="store_true", help="Print the resolved plan and command, execute nothing")
-    create_parser.add_argument("--max-age-days", type=int, help="Delete older mabox-*.iso files in the output dir after a successful build")
     create_parser.add_argument("--change-threshold-mb", type=int, help="Prompt about home-dir items new/grown by at least this many MiB since the last snapshot (default 200)")
     create_parser.add_argument("--encrypt", action="store_true", help="Encrypt rootfs.sfs with LUKS2 (preserving mode only; passphrase prompted interactively at build time)")
     create_parser.add_argument(

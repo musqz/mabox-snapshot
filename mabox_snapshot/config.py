@@ -22,7 +22,6 @@ class SnapshotConfig:
     demo_lang: str = constants.DEFAULT_DEMO_LANG
     no_calamares: bool = False
     skip_space_check: bool = False
-    max_age_days: int | None = None
     change_threshold_mb: int = 200
     encrypt: bool = False
     profile: str = "full"

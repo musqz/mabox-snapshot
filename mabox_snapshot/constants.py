@@ -20,8 +20,6 @@ OVERRIDE_RULES_FILE = Path("/etc/mabox-snapshot/overrides.list")
 
 NAMED_FOLDERS = ["Desktop", "Documents", "Downloads", "Music", "Pictures", "Videos", "Public", "Templates"]
 
-# Shared by cli.py's default --iso-name and retention.py's prune glob, so the
-# two can't drift apart.
 ISO_NAME_PREFIX = "mabox-"
 
 DEFAULT_WORKDIR = Path("/var/lib/mabox-snapshot/work")
