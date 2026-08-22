@@ -9,8 +9,6 @@
 
 Snapshot a running [Mabox Linux](https://maboxlinux.org/) system into a bootable live/install ISO. Mabox-only, Python, CLI-only — modeled on MX Linux's `mx-snapshot`, not a port of it.
 
-**Status:** the build pipeline is complete for both modes. Preserving-mode installs — `--encrypt` included — have been verified end to end in a real VM: Calamares installs without prompting for a new account and completes cleanly. See [CHANGELOG.md](CHANGELOG.md) for the full history.
-
 ## Two modes
 
 - **`preserving`** — a full personal clone: real `/home`, real accounts, real passwords. For migrating to new hardware or backing up your own machine. Not for sharing. Optionally LUKS2-encrypted (`--encrypt`). Calamares' own account-creation step is skipped — the snapshot already *is* your account.
