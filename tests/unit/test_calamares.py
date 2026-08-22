@@ -261,7 +261,7 @@ def test_remove_users_step_does_not_match_a_users_line_with_trailing_content():
 
 def test_unpackfs_pseudo_specs_declares_parent_dirs_before_the_file():
     specs = calamares.unpackfs_pseudo_specs(
-        "/work/unpackfs.conf", "/work/initcpio-override.conf", "/work/services-override.conf"
+        "/work/unpackfs.conf", "/work/initcpio-override.conf", "/work/services-override.conf", "/work/grubcfg-override.conf"
     )
     assert specs[0] == "etc/calamares d 755 0 0"
     assert specs[1] == "etc/calamares/modules d 755 0 0"
@@ -271,27 +271,36 @@ def test_unpackfs_pseudo_specs_declares_parent_dirs_before_the_file():
 
 def test_unpackfs_pseudo_specs_quotes_a_path_with_spaces():
     specs = calamares.unpackfs_pseudo_specs(
-        "/work dir/unpackfs.conf", "/work/initcpio-override.conf", "/work/services-override.conf"
+        "/work dir/unpackfs.conf", "/work/initcpio-override.conf", "/work/services-override.conf", "/work/grubcfg-override.conf"
     )
     assert "'/work dir/unpackfs.conf'" in specs[2]
 
 
 def test_unpackfs_pseudo_specs_always_injects_initcpio_override():
     specs = calamares.unpackfs_pseudo_specs(
-        "/work/unpackfs.conf", "/work/initcpio-override.conf", "/work/services-override.conf"
+        "/work/unpackfs.conf", "/work/initcpio-override.conf", "/work/services-override.conf", "/work/grubcfg-override.conf"
     )
-    assert len(specs) == 5
+    assert len(specs) == 6
     initcpio_spec = next(s for s in specs if s.startswith(calamares.INITCPIO_CONF_TARGET_PATH))
     assert initcpio_spec.endswith("/work/initcpio-override.conf")
 
 
 def test_unpackfs_pseudo_specs_always_injects_services_override():
     specs = calamares.unpackfs_pseudo_specs(
-        "/work/unpackfs.conf", "/work/initcpio-override.conf", "/work/services-override.conf"
+        "/work/unpackfs.conf", "/work/initcpio-override.conf", "/work/services-override.conf", "/work/grubcfg-override.conf"
     )
-    assert len(specs) == 5
+    assert len(specs) == 6
     services_spec = next(s for s in specs if s.startswith(calamares.SERVICES_CONF_TARGET_PATH))
     assert services_spec.endswith("/work/services-override.conf")
+
+
+def test_unpackfs_pseudo_specs_always_injects_grubcfg_override():
+    specs = calamares.unpackfs_pseudo_specs(
+        "/work/unpackfs.conf", "/work/initcpio-override.conf", "/work/services-override.conf", "/work/grubcfg-override.conf"
+    )
+    assert len(specs) == 6
+    grubcfg_spec = next(s for s in specs if s.startswith(calamares.GRUBCFG_CONF_TARGET_PATH))
+    assert grubcfg_spec.endswith("/work/grubcfg-override.conf")
 
 
 def test_unpackfs_pseudo_specs_encrypt_true_injects_settings_and_shellprocess():
@@ -299,12 +308,13 @@ def test_unpackfs_pseudo_specs_encrypt_true_injects_settings_and_shellprocess():
         "/work/unpackfs.conf",
         "/work/initcpio-override.conf",
         "/work/services-override.conf",
+        "/work/grubcfg-override.conf",
         encrypt=True,
         settings_conf_path="/work/settings-encrypt.conf",
         shellprocess_conf_path="/work/shellprocess-remount.conf",
         shellprocess_cleanup_conf_path="/work/shellprocess-cleanup.conf",
     )
-    assert len(specs) == 8
+    assert len(specs) == 9
     settings_spec = next(s for s in specs if s.startswith(calamares.SETTINGS_CONF_TARGET_PATH))
     assert settings_spec.endswith("/work/settings-encrypt.conf")
     shellprocess_spec = next(s for s in specs if s.startswith(calamares.SHELLPROCESS_CONF_TARGET_PATH))
@@ -321,12 +331,23 @@ def test_unpackfs_pseudo_specs_settings_conf_injected_without_encrypt():
         "/work/unpackfs.conf",
         "/work/initcpio-override.conf",
         "/work/services-override.conf",
+        "/work/grubcfg-override.conf",
         settings_conf_path="/work/settings-preserving.conf",
     )
-    assert len(specs) == 6
+    assert len(specs) == 7
     settings_spec = next(s for s in specs if s.startswith(calamares.SETTINGS_CONF_TARGET_PATH))
     assert settings_spec.endswith("/work/settings-preserving.conf")
     assert not any(s.startswith(calamares.SHELLPROCESS_CONF_TARGET_PATH) for s in specs)
+
+
+def test_grubcfg_conf_override_keeps_existing_distributor():
+    assert "keep_distributor: true" in calamares.GRUBCFG_CONF_OVERRIDE
+
+
+def test_grubcfg_conf_override_preserves_stock_defaults():
+    assert 'kernel_params: [ "quiet" ]' in calamares.GRUBCFG_CONF_OVERRIDE
+    assert "GRUB_TIMEOUT: 5" in calamares.GRUBCFG_CONF_OVERRIDE
+    assert "overwrite: false" in calamares.GRUBCFG_CONF_OVERRIDE
 
 
 def test_initcpio_conf_override_regenerates_every_preset():

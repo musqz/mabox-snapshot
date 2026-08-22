@@ -549,6 +549,46 @@ SERVICES_CONF_OVERRIDE = (
 )
 
 
+# Calamares' own grubcfg *module* (unrelated to this project's grubcfg.py,
+# which only builds the live ISO's boot menu -- this is the module that
+# configures the INSTALLED target's /etc/default/grub). Per its stock
+# /usr/share/calamares/modules/grubcfg.conf's own docs, it unconditionally
+# recalculates GRUB_DISTRIBUTOR from the active Calamares branding
+# component's bootloaderEntryName whenever keep_distributor is false (the
+# stock default) -- it does NOT preserve whatever's already in the
+# target's own /etc/default/grub. Confirmed on this host: a real Mabox
+# system already ships GRUB_DISTRIBUTOR='Mabox' correctly on its own, but
+# with no custom slide-*.png/branding.toml configured (see load_branding()
+# -- reset-mode only; preserving mode never even attempts custom branding)
+# Calamares falls back to its stock 'manjaro' branding component, whose
+# branding.desc sets bootloaderEntryName: Manjaro -- so grubcfg clobbers
+# the already-correct value with "Manjaro" on every install regardless of
+# mode. Confirmed against a real install: booting the resulting VM showed
+# "*Manjaro Linux" / "Advanced options for Manjaro Linux" in GRUB despite
+# the source system's own /etc/default/grub being correct all along.
+# keep_distributor: true stops grubcfg from touching GRUB_DISTRIBUTOR at
+# all, so the install just carries over whatever the snapshot already has
+# -- correct unconditionally, independent of mode or whether custom
+# Calamares branding is ever configured. The rest of this override
+# reproduces the stock file's other settings unchanged (verified against
+# the installed calamares package on this host), same "keep everything
+# except the one broken setting" approach as SERVICES_CONF_OVERRIDE above.
+GRUBCFG_CONF_TARGET_PATH = "etc/calamares/modules/grubcfg.conf"
+GRUBCFG_CONF_OVERRIDE = (
+    "overwrite: false\n"
+    "prefer_grub_d: false\n"
+    "keep_distributor: true\n"
+    'kernel_params: [ "quiet" ]\n'
+    "defaults:\n"
+    "    GRUB_TIMEOUT: 5\n"
+    '    GRUB_DEFAULT: "saved"\n'
+    "    GRUB_DISABLE_SUBMENU: true\n"
+    '    GRUB_TERMINAL_OUTPUT: "console"\n'
+    "    GRUB_DISABLE_RECOVERY: true\n"
+    "always_use_defaults: false\n"
+)
+
+
 def build_unpackfs_conf(
     layer_names: list[str],
     basedir: str = constants.MISO_BASEDIR,
@@ -576,6 +616,7 @@ def unpackfs_pseudo_specs(
     conf_path: Path,
     initcpio_conf_path: Path,
     services_conf_path: Path,
+    grubcfg_conf_path: Path,
     encrypt: bool = False,
     settings_conf_path: Path | None = None,
     shellprocess_conf_path: Path | None = None,
@@ -584,17 +625,19 @@ def unpackfs_pseudo_specs(
     """mksquashfs -p specs injecting conf_path's contents (written by the
     caller from build_unpackfs_conf()) at UNPACKFS_CONF_PATH,
     initcpio_conf_path's contents (INITCPIO_CONF_OVERRIDE, written
-    verbatim by the caller) at INITCPIO_CONF_TARGET_PATH, and
+    verbatim by the caller) at INITCPIO_CONF_TARGET_PATH,
     services_conf_path's contents (SERVICES_CONF_OVERRIDE, written
-    verbatim by the caller) at SERVICES_CONF_TARGET_PATH, inside the
-    squashed rootfs layer. The leading two dir entries are required, not
+    verbatim by the caller) at SERVICES_CONF_TARGET_PATH, and
+    grubcfg_conf_path's contents (GRUBCFG_CONF_OVERRIDE, written verbatim
+    by the caller) at GRUBCFG_CONF_TARGET_PATH, inside the squashed
+    rootfs layer. The leading two dir entries are required, not
     cosmetic -- verified empirically: mksquashfs's -p file spec fails
     outright ('Pathname "etc" does not exist in filesystem') unless its
     parent dirs are already real, and /etc/calamares/ (an admin-override
     path Calamares only optionally reads) usually isn't, even on a host
     with calamares itself installed. Declaring them as pseudo-dirs works
     whether or not the real dir already exists (also verified). The
-    caller must also exclude all three target paths from the layer's own
+    caller must also exclude all four target paths from the layer's own
     source scan (see cli.py) -- if a real file already sits there,
     mksquashfs silently keeps it over the pseudo-file instead.
 
@@ -625,6 +668,7 @@ def unpackfs_pseudo_specs(
         f"{UNPACKFS_CONF_PATH} f 644 0 0 cat {shlex.quote(str(conf_path))}",
         f"{INITCPIO_CONF_TARGET_PATH} f 644 0 0 cat {shlex.quote(str(initcpio_conf_path))}",
         f"{SERVICES_CONF_TARGET_PATH} f 644 0 0 cat {shlex.quote(str(services_conf_path))}",
+        f"{GRUBCFG_CONF_TARGET_PATH} f 644 0 0 cat {shlex.quote(str(grubcfg_conf_path))}",
     ]
     if settings_conf_path is not None:
         specs.append(f"{SETTINGS_CONF_TARGET_PATH} f 644 0 0 cat {shlex.quote(str(settings_conf_path))}")

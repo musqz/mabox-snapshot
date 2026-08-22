@@ -175,6 +175,16 @@ def cmd_create(args: argparse.Namespace) -> int:
     # SERVICES_CONF_OVERRIDE) -- injected for every build, both modes,
     # same treatment as initcpio_override_path above.
     services_override_path = cfg.workdir / "services-override.conf"
+    # Calamares' own grubcfg module overwrites the target's GRUB_DISTRIBUTOR
+    # from whatever branding component is active (stock 'manjaro' unless
+    # custom branding is configured -- see calamares.py's
+    # GRUBCFG_CONF_OVERRIDE), clobbering the correct value a real Mabox
+    # snapshot already carries in its own /etc/default/grub. Confirmed
+    # against a real install: the installed system's GRUB menu read
+    # "Manjaro Linux" despite the source system being correct. Injected for
+    # every build, both modes, same treatment as initcpio_override_path
+    # above.
+    grubcfg_override_path = cfg.workdir / "grubcfg-override.conf"
     # Every preserving-mode build needs its own settings.conf, at minimum
     # to remove the '- users' step (see calamares.py's remove_users_step()
     # -- preserving mode's snapshot already has a real account, and a
@@ -189,6 +199,7 @@ def cmd_create(args: argparse.Namespace) -> int:
         unpackfs_conf_path,
         initcpio_override_path,
         services_override_path,
+        grubcfg_override_path,
         encrypt=cfg.encrypt,
         settings_conf_path=settings_conf_path,
         shellprocess_conf_path=shellprocess_conf_path,
@@ -210,6 +221,7 @@ def cmd_create(args: argparse.Namespace) -> int:
     plan.layers[0].exclude_patterns.append(calamares.UNPACKFS_CONF_PATH)
     plan.layers[0].exclude_patterns.append(calamares.INITCPIO_CONF_TARGET_PATH)
     plan.layers[0].exclude_patterns.append(calamares.SERVICES_CONF_TARGET_PATH)
+    plan.layers[0].exclude_patterns.append(calamares.GRUBCFG_CONF_TARGET_PATH)
     if args.mode == "preserving":
         plan.layers[0].exclude_patterns.append(calamares.SETTINGS_CONF_TARGET_PATH)
         # Without this, the build host's own real /etc/skel (which can be
@@ -400,6 +412,7 @@ def cmd_create(args: argparse.Namespace) -> int:
     )
     initcpio_override_path.write_text(calamares.INITCPIO_CONF_OVERRIDE)
     services_override_path.write_text(calamares.SERVICES_CONF_OVERRIDE)
+    grubcfg_override_path.write_text(calamares.GRUBCFG_CONF_OVERRIDE)
     if args.mode == "preserving":
         # Both calamares.CALAMARES_SETTINGS_FILE (missing if calamares
         # itself isn't installed -- it's OPTIONAL_TOOLS, only warned about
