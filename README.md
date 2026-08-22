@@ -145,6 +145,10 @@ The other subcommands are smaller, self-explanatory surfaces — run any of them
 | `skel audit` | Show which desktop config files differ from Mabox's shipped defaults |
 | `doctor` | Check prerequisites, read-only, no root |
 
+## Custom GRUB splash
+
+Drop a PNG at `/etc/mabox-snapshot/images/splash.png` and it's automatically resized/cropped to 1920x1080 and used as the GRUB boot menu's background. If it's missing, the ISO just gets a plain GRUB menu -- no error.
+
 ## Automatic snapshots
 
 `packaging/` ships a `mabox-snapshot.service` + `.timer` pair for unattended `preserving`-mode backups: 15 minutes after boot, then every 4 days, only on AC power, at idle I/O priority. `--encrypt` is never used here — its passphrase prompt needs a real terminal by design, which an unattended timer doesn't have; point `output_dir` at an already-secured destination instead.
