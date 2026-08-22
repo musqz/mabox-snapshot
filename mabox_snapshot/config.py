@@ -22,12 +22,9 @@ class SnapshotConfig:
     demo_lang: str = constants.DEFAULT_DEMO_LANG
     no_calamares: bool = False
     skip_space_check: bool = False
-    keep_workdir: bool = False
-    month: bool = False
     max_age_days: int | None = None
     change_threshold_mb: int = 200
     encrypt: bool = False
-    backup_destinations: tuple[str, ...] = ()
     profile: str = "full"
 
 
@@ -49,8 +46,6 @@ def _coerce(raw: dict) -> dict:
         out["exclude_list"] = Path(out["exclude_list"])
     if "exclude_folders" in out:
         out["exclude_folders"] = tuple(out["exclude_folders"])
-    if "backup_destinations" in out:
-        out["backup_destinations"] = tuple(out["backup_destinations"])
     return out
 
 

@@ -72,16 +72,16 @@ options:
 
 ```
 usage: mabox-snapshot create [-h] --mode {preserving,reset} [-w WORKDIR] [-o]
-                              [-m] [--output-dir OUTPUT_DIR]
+                              [--output-dir OUTPUT_DIR]
                               [--iso-name ISO_NAME]
                               [--compression {zstd,xz,lz4,lzo,gzip}]
                               [--compression-level COMPRESSION_LEVEL]
                               [--exclude-list EXCLUDE_LIST]
                               [--exclude-folder {Desktop,Documents,Downloads,Music,Pictures,Videos,Public,Templates}]
                               [--kernel KERNEL] [--all-kernels] [--dry-run]
-                              [--keep-workdir] [--max-age-days MAX_AGE_DAYS]
+                              [--max-age-days MAX_AGE_DAYS]
                               [--change-threshold-mb CHANGE_THRESHOLD_MB]
-                              [--encrypt] [--backup-to BACKUP_TO]
+                              [--encrypt]
                               [--profile {full,lean}]
 
 Build a bootable live/install ISO from the running system.
@@ -100,8 +100,6 @@ options:
   -o, --skip-space-check
                         Skip the free-space precheck on workdir/output-dir
                         before building
-  -m, --month           Name the output by year-month instead of a full
-                        timestamp
   --output-dir OUTPUT_DIR
                         Directory the finished ISO is written to (default:
                         same as --workdir)
@@ -126,9 +124,6 @@ options:
   --all-kernels         Include every installed kernel instead of just the
                         newest
   --dry-run             Print the resolved plan and command, execute nothing
-  --keep-workdir        No-op for now: post-build workdir cleanup isn't
-                        implemented yet, so build state under --workdir is
-                        always kept after a successful build
   --max-age-days MAX_AGE_DAYS
                         Delete older mabox-*.iso files in the output dir after
                         a successful build
@@ -137,9 +132,6 @@ options:
                         many MiB since the last snapshot (default 200)
   --encrypt             Encrypt rootfs.sfs with LUKS2 (preserving mode only;
                         passphrase prompted interactively at build time)
-  --backup-to BACKUP_TO
-                        rsync the finished ISO here (local path or
-                        user@host:path); repeatable
   --profile {full,lean}
                         Size/completeness tier: full (default, today's
                         behavior) or lean (trims unselected kernels' module
@@ -162,7 +154,7 @@ The other subcommands are smaller, self-explanatory surfaces — run any of them
 
 ## Automatic snapshots
 
-`packaging/` ships a `mabox-snapshot.service` + `.timer` pair for unattended `preserving`-mode backups: 15 minutes after boot, then every 4 days, only on AC power, at idle I/O priority. `--encrypt` is never used here — its passphrase prompt needs a real terminal by design, which an unattended timer doesn't have; point it at an already-secured destination instead with `--backup-to` or `config set output_dir ...`.
+`packaging/` ships a `mabox-snapshot.service` + `.timer` pair for unattended `preserving`-mode backups: 15 minutes after boot, then every 4 days, only on AC power, at idle I/O priority. `--encrypt` is never used here — its passphrase prompt needs a real terminal by design, which an unattended timer doesn't have; point `output_dir` at an already-secured destination instead.
 
 ```sh
 mabox-snapshot config set output_dir /mnt/backups/mabox-snapshots
