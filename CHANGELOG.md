@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Removed unattended systemd timer automation (`mabox-snapshot.service`/`.timer`) -- no longer
+  shipped or packaged.
+
 ## 0.1.0
 
 First release.

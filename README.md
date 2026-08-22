@@ -149,15 +149,6 @@ The other subcommands are smaller, self-explanatory surfaces — run any of them
 
 Drop a PNG at `/etc/mabox-snapshot/images/splash.png` and it's automatically resized/cropped to 1920x1080 and used as the GRUB boot menu's background. If it's missing, the ISO just gets a plain GRUB menu -- no error.
 
-## Automatic snapshots
-
-`packaging/` ships a `mabox-snapshot.service` + `.timer` pair for unattended `preserving`-mode backups: 15 minutes after boot, then every 4 days, only on AC power, at idle I/O priority. `--encrypt` is never used here — its passphrase prompt needs a real terminal by design, which an unattended timer doesn't have; point `output_dir` at an already-secured destination instead.
-
-```sh
-mabox-snapshot config set output_dir /mnt/backups/mabox-snapshots
-systemctl enable --now mabox-snapshot.timer
-```
-
 ## Testing in a VM
 
 Boot-testing a produced ISO before trusting it — [quickemu](https://github.com/quickemu-project/quickemu) with a SPICE display works well for this. For clipboard/resolution/mouse integration and clean host↔guest shutdown inside the guest, install and enable:
