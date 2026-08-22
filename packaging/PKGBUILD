@@ -1,6 +1,6 @@
 # Maintainer: musqz
-pkgname=mabox-snapshot-git
-pkgver=r107.3f24d60
+pkgname=mabox-snapshot
+pkgver=0.1.0
 pkgrel=1
 pkgdesc="Snapshot a running Mabox Linux system into a bootable live/install ISO"
 arch=('any')
@@ -26,31 +26,24 @@ optdepends=(
     'yay: AUR-reproducibility check for foreign packages'
     'cryptsetup: --encrypt LUKS2-encrypted preserving-mode ISOs'
 )
-makedepends=('git' 'python-build' 'python-installer' 'python-hatchling')
+makedepends=('python-build' 'python-installer' 'python-hatchling')
 checkdepends=('python-pytest')
-provides=('mabox-snapshot')
-conflicts=('mabox-snapshot')
 backup=('etc/mabox-snapshot/excludes.list')
-source=("git+$url.git")
-sha256sums=('SKIP')
-
-pkgver() {
-    cd "$srcdir/mabox-snapshot"
-    printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
-}
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('0746b14405a523d5e752a9febb5258d7e69c23ce0011a292880f62d57a04044a')
 
 build() {
-    cd "$srcdir/mabox-snapshot"
+    cd "$pkgname-$pkgver"
     python -m build --wheel --no-isolation
 }
 
 check() {
-    cd "$srcdir/mabox-snapshot"
+    cd "$pkgname-$pkgver"
     python -m pytest tests/unit/ -q
 }
 
 package() {
-    cd "$srcdir/mabox-snapshot"
+    cd "$pkgname-$pkgver"
     python -m installer --destdir="$pkgdir" dist/*.whl
 
     install -Dm644 configs/excludes.list.default \
