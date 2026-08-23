@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.4
 
 - Added the `miso_persist` initramfs hook: every ISO now boots with support for an optional
   `MABOX_PERSIST`-labeled ext4 overlay partition on the boot device, so changes made while running
