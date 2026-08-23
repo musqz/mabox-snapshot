@@ -82,6 +82,8 @@ def _apply_create_overrides(cfg: config.SnapshotConfig, args: argparse.Namespace
         overrides["encrypt"] = True
     if args.profile is not None:
         overrides["profile"] = args.profile
+    if args.no_checksums:
+        overrides["checksums"] = False
     return replace(cfg, **overrides)
 
 
@@ -479,6 +481,10 @@ def cmd_create(args: argparse.Namespace) -> int:
 
     print(f"ISO written to {dest}")
 
+    if cfg.checksums:
+        checksum_path = isobuild.write_checksum(dest)
+        print(f"checksum written to {checksum_path}")
+
     # Best-effort only: the ISO is already written and is the primary
     # deliverable, so a manifest failure (e.g. /var/lib full/unwritable, or
     # SUDO_USER unset) must warn, not abort -- deliberately not the usual
@@ -710,6 +716,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--profile", choices=list(profiles.PROFILES),
         help="Size/completeness tier: full (default, today's behavior) or lean (trims unselected kernels' "
              "module trees plus VM/container storage; see 'mabox-snapshot skel audit' to curate further)",
+    )
+    create_parser.add_argument(
+        "-n", "--no-checksums", action="store_true",
+        help="Skip writing a .sha256 checksum file alongside the ISO",
     )
     create_parser.set_defaults(func=cmd_create)
 

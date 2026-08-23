@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `create` now writes a `.sha256` checksum file alongside the built ISO by default; disable with
+  `-n`/`--no-checksums`.
 - Removed unattended systemd timer automation (`mabox-snapshot.service`/`.timer`) -- no longer
   shipped or packaged.
 
