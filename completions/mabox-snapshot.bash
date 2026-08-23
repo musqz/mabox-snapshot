@@ -112,6 +112,16 @@ _mabox_snapshot() {
     local cur prev words cword
     _init_completion || return
 
+    # A leading "sudo" may already be present here if this function was
+    # reached via _mabox_snapshot_sudo below (or some other shell's own
+    # generic sudo dispatch) -- strip it so the rest of this function sees
+    # the same words/cword shape as a bare "mabox-snapshot ..." invocation
+    # either way.
+    if [[ "${words[0]}" == sudo ]]; then
+        words=("${words[@]:1}")
+        ((cword--))
+    fi
+
     if [[ $cword -eq 1 ]]; then
         COMPREPLY=($(compgen -W "version doctor create config excludes packages skel -h --help" -- "$cur"))
         return
@@ -129,3 +139,28 @@ _mabox_snapshot() {
     esac
 } &&
     complete -F _mabox_snapshot mabox-snapshot
+
+# Every mutating subcommand needs root, so "sudo mabox-snapshot ..." is the
+# everyday invocation -- but bash only ever dispatches completion off
+# COMP_WORDS[0], which is "sudo" there, so _mabox_snapshot above never runs
+# for it on its own. Reuse it by temporarily rewriting COMP_WORDS/COMP_CWORD
+# to drop "sudo" (and any of sudo's own flags, e.g. -E/-u user) before
+# calling it, then restoring them. Only claims the "sudo" completion slot if
+# nothing already does (bash-completion's own generic sudo support, or
+# another package's), so this never overrides working sudo completion for
+# other commands.
+_mabox_snapshot_sudo() {
+    local i=1
+    while [[ "${COMP_WORDS[i]}" == -* ]]; do
+        ((i++))
+    done
+    [[ "${COMP_WORDS[i]}" == mabox-snapshot ]] || return
+
+    local real_words=("${COMP_WORDS[@]}") real_cword=$COMP_CWORD
+    COMP_WORDS=("${COMP_WORDS[@]:i}")
+    COMP_CWORD=$((COMP_CWORD - i))
+    _mabox_snapshot
+    COMP_WORDS=("${real_words[@]}")
+    COMP_CWORD=$real_cword
+} &&
+    { complete -p sudo &>/dev/null || complete -F _mabox_snapshot_sudo sudo; }

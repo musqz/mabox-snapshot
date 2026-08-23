@@ -6,6 +6,10 @@
   `PermissionError` traceback when run without root -- they all write to root-owned files under
   `/etc/mabox-snapshot/`. Now they print a clean `error: ... requires root -- re-run with sudo.` and exit 1,
   matching `create`'s existing root check.
+- Fixed bash tab-completion not working under `sudo mabox-snapshot ...` -- every mutating subcommand needs
+  root, so that's the everyday invocation, but bash only ever dispatches completion off the first word on the
+  line (`sudo`), so our completion function never ran for it. Now registered for `sudo` too, only when nothing
+  else already claims that slot, so it never overrides completion for other sudo'd commands.
 
 ## 0.2.2
 
