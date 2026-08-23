@@ -397,7 +397,7 @@ def test_exclude_unselected_kernel_modules_trims_only_non_selected():
 
     result = excludes.exclude_unselected_kernel_modules([old, new], [new], versions)
 
-    assert result == ["usr/lib/modules/6.12.1-1-MANJARO/*"]
+    assert result == ["usr/lib/modules/6.12.1-1-MANJARO/*", "etc/mkinitcpio.d/linux612.preset"]
 
 
 def test_exclude_unselected_kernel_modules_empty_when_all_selected():
