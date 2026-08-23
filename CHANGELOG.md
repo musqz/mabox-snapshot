@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.2
+
 - **Breaking:** `create`'s `--mode {preserving,reset}` is now a required positional argument:
   `mabox-snapshot create reset ...` instead of `mabox-snapshot create --mode reset ...`. Matches
   the rest of the CLI's subcommand style and fixes bash-completion discoverability (`create <TAB>`
