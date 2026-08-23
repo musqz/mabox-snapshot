@@ -1,6 +1,6 @@
 pkgbase = mabox-snapshot
 	pkgdesc = Snapshot a running Mabox Linux system into a bootable live/install ISO
-	pkgver = 0.2.2
+	pkgver = 0.2.3
 	pkgrel = 1
 	url = https://github.com/musqz/mabox-snapshot
 	arch = any
@@ -27,7 +27,7 @@ pkgbase = mabox-snapshot
 	optdepends = cryptsetup: --encrypt LUKS2-encrypted preserving-mode ISOs
 	optdepends = bash-completion: tab-completion for the mabox-snapshot CLI
 	backup = etc/mabox-snapshot/excludes.list
-	source = mabox-snapshot-0.2.2.tar.gz::https://github.com/musqz/mabox-snapshot/archive/refs/tags/v0.2.2.tar.gz
-	sha256sums = 41ac68dd5cec27986af511fb8764b079284b87d038f1ef0510c64a828b9a550f
+	source = mabox-snapshot-0.2.3.tar.gz::https://github.com/musqz/mabox-snapshot/archive/refs/tags/v0.2.3.tar.gz
+	sha256sums = SKIP
 
 pkgname = mabox-snapshot
