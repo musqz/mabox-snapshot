@@ -6,6 +6,9 @@
   `-n`/`--no-checksums`.
 - Removed unattended systemd timer automation (`mabox-snapshot.service`/`.timer`) -- no longer
   shipped or packaged.
+- Added `-h` epilog examples to `config`, `config set`, `excludes`, `excludes add/remove`, and
+  `excludes rules`/`rules add/remove` -- surfaces the CLI-flag-to-config-key naming convention and
+  the `excludes rules` include/exclude combo without needing to drill through multiple `-h` levels.
 
 ## 0.1.0
 
