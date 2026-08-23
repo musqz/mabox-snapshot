@@ -35,11 +35,12 @@ Print the installed version.
 .SS doctor
 Check prerequisites (required tools, disk space, detected kernels).
 Read-only, no root needed.
-.SS "create --mode {preserving,reset} [options]"
-Build a snapshot. Requires root. Options:
+.SS "create {preserving,reset} [options]"
+Build a snapshot. Requires root.
 .TP
-.B --mode {preserving,reset}
-Build mode; required.
+.B preserving | reset
+Build mode; required positional argument. See DESCRIPTION above for what
+each mode does.
 .TP
 .BR -w ", " --workdir " " \fIDIR\fR
 Scratch directory for build state -- squashfs layers, ISO tree, mkinitcpio
@@ -199,14 +200,14 @@ drive:
 .RS
 .nf
 mabox-snapshot doctor
-sudo mabox-snapshot create --mode preserving --output-dir /mnt/usb --encrypt
+sudo mabox-snapshot create preserving --output-dir /mnt/usb --encrypt
 .fi
 .RE
 .PP
 Build a sanitized ISO to share, with every installed kernel:
 .RS
 .nf
-mabox-snapshot create --mode reset --output-dir /mnt/usb --all-kernels
+mabox-snapshot create reset --output-dir /mnt/usb --all-kernels
 .fi
 .RE
 .PP

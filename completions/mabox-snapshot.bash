@@ -12,8 +12,6 @@ _mabox_snapshot_config_keys="workdir output_dir compression compression_level ex
 
 _mabox_snapshot_create() {
     case "$prev" in
-        --mode)
-            COMPREPLY=($(compgen -W "$_mabox_snapshot_modes" -- "$cur")); return ;;
         --compression)
             COMPREPLY=($(compgen -W "$_mabox_snapshot_compressions" -- "$cur")); return ;;
         --profile)
@@ -28,14 +26,24 @@ _mabox_snapshot_create() {
             return ;;
     esac
 
-    if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "
-            --mode -w --workdir -o --skip-space-check --output-dir --iso-name
-            --compression --compression-level --exclude-list --exclude-folder
-            --kernel --all-kernels --dry-run --change-threshold-mb --encrypt
-            --profile -n --no-checksums -h --help
-        " -- "$cur"))
+    # mode is a positional argument (create {preserving,reset} [options]) --
+    # offer it until one of the two values has actually been typed.
+    local w mode_given=0
+    for w in "${words[@]:2}"; do
+        [[ "$w" == "preserving" || "$w" == "reset" ]] && mode_given=1
+    done
+
+    if [[ $mode_given -eq 0 && "$cur" != -* ]]; then
+        COMPREPLY=($(compgen -W "$_mabox_snapshot_modes" -- "$cur"))
+        return
     fi
+
+    COMPREPLY=($(compgen -W "
+        -w --workdir -o --skip-space-check --output-dir --iso-name
+        --compression --compression-level --exclude-list --exclude-folder
+        --kernel --all-kernels --dry-run --change-threshold-mb --encrypt
+        --profile -n --no-checksums -h --help
+    " -- "$cur"))
 }
 
 _mabox_snapshot_excludes() {
@@ -62,7 +70,7 @@ _mabox_snapshot_excludes() {
             fi
             ;;
         list)
-            [[ "$cur" == -* ]] && COMPREPLY=($(compgen -W "--compiled -h --help" -- "$cur"))
+            COMPREPLY=($(compgen -W "--compiled -h --help" -- "$cur"))
             ;;
     esac
 }
@@ -81,7 +89,7 @@ _mabox_snapshot_config() {
 _mabox_snapshot_packages() {
     if [[ $cword -eq 2 ]]; then
         COMPREPLY=($(compgen -W "list -h --help" -- "$cur"))
-    elif [[ "${words[2]}" == "list" && "$cur" == -* ]]; then
+    elif [[ "${words[2]}" == "list" ]]; then
         COMPREPLY=($(compgen -W "--explicit --aur --local --all -h --help" -- "$cur"))
     fi
 }
@@ -96,7 +104,7 @@ _mabox_snapshot_skel() {
         case "$prev" in
             --home) _filedir -d; return ;;
         esac
-        [[ "$cur" == -* ]] && COMPREPLY=($(compgen -W "--home --show-identical -h --help" -- "$cur"))
+        COMPREPLY=($(compgen -W "--home --show-identical -h --help" -- "$cur"))
     fi
 }
 
@@ -116,7 +124,7 @@ _mabox_snapshot() {
         packages) _mabox_snapshot_packages ;;
         skel)     _mabox_snapshot_skel ;;
         version|doctor)
-            [[ "$cur" == -* ]] && COMPREPLY=($(compgen -W "-h --help" -- "$cur"))
+            COMPREPLY=($(compgen -W "-h --help" -- "$cur"))
             ;;
     esac
 } &&

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Breaking:** `create`'s `--mode {preserving,reset}` is now a required positional argument:
+  `mabox-snapshot create reset ...` instead of `mabox-snapshot create --mode reset ...`. Matches
+  the rest of the CLI's subcommand style and fixes bash-completion discoverability (`create <TAB>`
+  now shows `preserving reset` immediately, the same way `config <TAB>` shows its subcommands).
+- Fixed bash-completion: `create`, `version`, `doctor`, `packages list`, `skel audit`, and
+  `excludes rules list` now offer their flags on a bare tab press, not just after typing `-`.
+
 ## 0.2.1
 
 - Added hand-written bash tab-completion (`completions/mabox-snapshot.bash`), installed to

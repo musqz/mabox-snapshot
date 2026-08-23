@@ -39,7 +39,7 @@ def _dir_size(path: Path) -> int:
 def scan_home_entries(home: Path) -> list[HistoryEntry]:
     """Top-level children of home only -- not a recursive listing. Directories
     get the recursive total of file sizes beneath them; files get their own
-    size. Runs the same way regardless of --mode: this tracks the live
+    size. Runs the same way regardless of mode: this tracks the live
     filesystem's home-dir growth, independent of what a given ISO contains."""
     if not home.exists():
         raise FileNotFoundError(f"home directory {home} does not exist")

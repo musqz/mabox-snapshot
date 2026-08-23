@@ -91,7 +91,7 @@ def cmd_create(args: argparse.Namespace) -> int:
     cfg = _apply_create_overrides(config.load(), args)
 
     if cfg.encrypt and args.mode == "reset":
-        print("error: --encrypt is not supported with --mode reset (reset mode only ever contains the synthetic demo account)", file=sys.stderr)
+        print("error: --encrypt is not supported with 'create reset' (reset mode only ever contains the synthetic demo account)", file=sys.stderr)
         return 1
 
     output_dir = cfg.output_dir or cfg.workdir
@@ -653,12 +653,12 @@ def build_parser() -> argparse.ArgumentParser:
         description="Build a bootable live/install ISO from the running system.",
         epilog=(
             "example:\n"
-            "  mabox-snapshot create --mode reset --output-dir /mnt/usb --all-kernels\n"
+            "  mabox-snapshot create reset --output-dir /mnt/usb --all-kernels\n"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     create_parser.add_argument(
-        "--mode", choices=["preserving", "reset"], required=True,
+        "mode", choices=["preserving", "reset"],
         help=(
             "preserving: full personal clone (real /home, real accounts, real passwords; "
             "optionally --encrypt). reset: sanitized ISO for sharing (synthetic demo/demo "
