@@ -1,0 +1,172 @@
+# mabox-snapshot addition: optionally overlays a writable MABOX_PERSIST
+# ext4 partition -- created by the separate mabox-persistence-usb tool's
+# `write` command, never by mabox-snapshot itself -- on top of the root
+# miso/miso_luks already assembled, so changes made while running from a
+# USB stick survive a reboot. See
+# docs/superpowers/specs/2026-08-20-persistent-usb-design.md.
+#
+# Always no-op-safe: no MABOX_PERSIST partition -> boot proceeds exactly
+# as it does today, unmodified read-only-squashfs-backed root. Never a
+# hard requirement, never a hard boot failure -- a missing or broken
+# overlay falls back to the already-working boot rather than stranding
+# the user at an initramfs shell (see _miso_persist_apply_overlay()).
+#
+# Deliberately NOT a modified copy of miso/miso_luks the way miso_luks is
+# a modified copy of miso (see configs/initcpio/hooks/miso_luks's own
+# header comment) -- that fork was needed there because the LUKS unlock
+# has to happen inside miso_mount_handler()'s per-layer loop. Nothing
+# here needs that: this hook only has to run once, immediately before
+# switch_root, against whatever newroot the boot's real mount_handler
+# (miso_mount_handler, defined identically by either miso or miso_luks --
+# see mabox_snapshot.constants.MKINITCPIO_MISO_HOOKS /
+# MKINITCPIO_MISO_LUKS_HOOKS, never both loaded together -- OR one of the
+# miso_loop_mnt / miso_pxe_nbd / miso_pxe_http / miso_pxe_nfs wrapper
+# handlers, each of which conditionally overrides mount_handler and then
+# calls miso_mount_handler itself once its own alt-boot-source setup is
+# done) already produced. So this hook wraps mount_handler generically:
+# run_hook() saves whatever mount_handler already holds (not a hardcoded
+# "miso_mount_handler" -- see the dynamic dispatch in
+# miso_persist_mount_handler() below) before replacing it with its own,
+# then layers the persistence overlay on top of that saved handler's
+# result. This is why miso_persist is placed LAST among the miso_* hooks
+# in MKINITCPIO_MISO_HOOKS/MKINITCPIO_MISO_LUKS_HOOKS, after
+# miso_loop_mnt/miso_pxe_*: any of those, when triggered by their own
+# boot params (img_loop=, PXE net params), unconditionally clobber
+# mount_handler themselves -- loading before them would have this hook's
+# own assignment silently discarded on an img_loop= or PXE boot, with no
+# warning and no persistence. Loading after them and capturing whatever
+# they left in mount_handler avoids depending on which alt-boot-source
+# path (if any) was actually taken.
+#
+# The saved handler's result (newroot) is itself already an overlayfs
+# (miso's own tmpfs-backed overlay_root, see miso's _mnt_overlayfs());
+# bind-mounting it aside and using the bind mount as this hook's own
+# lowerdir is what lets a second, persistent overlay stack on top without
+# re-deriving miso_mount_handler's internal (bash-local, not exported)
+# list of squashfs layer mountpoints. Nested overlayfs-as-lowerdir has
+# been supported upstream for years and is expected to work fine on
+# Mabox's kernels -- unverified in this repo until a real QEMU boot test
+# (same precedent as miso_luks's original addition), so treat this file
+# as needing that verification before shipping to real hardware.
+
+# Same-device-only by design (decision 1 in the persistent-usb design
+# spec): a fixed literal here, not a lookup, because this hook only ever
+# looks at partitions of the disk it booted from (see
+# _miso_persist_find_device()) -- never a global /dev/disk/by-label/
+# scan, which would resolve ambiguously if more than one
+# MABOX_PERSIST-labeled stick were attached at once. Must stay in sync by
+# hand with mabox_persistence_usb.constants.PERSIST_LABEL -- the two
+# repos share no runtime code, same manual-sync precedent as
+# mabox_snapshot.constants.ISO_LUKS_MAPPER_NAME vs. this hook's own
+# _mnt_luks_sfs() mapper name.
+_MISO_PERSIST_LABEL="MABOX_PERSIST"
+
+# args: none -- relies on ${misodevice}, already set by miso/miso_luks's
+# own run_hook() earlier in this same init process (mkinitcpio hooks all
+# run in one shell, so their variables stay in scope for hooks that load
+# after them).
+_miso_persist_find_device() {
+    local disk_dev disk sysdir part label
+
+    [[ -n "${misodevice}" ]] || return 1
+    disk_dev=$(readlink -f "${misodevice}" 2>/dev/null)
+    [[ -b "${disk_dev}" ]] || return 1
+    disk="${disk_dev##*/}"
+    sysdir="/sys/block/${disk}"
+    [[ -d "${sysdir}" ]] || return 1
+
+    for part in "${sysdir}/${disk}"*; do
+        [[ -d "${part}" ]] || continue
+        label=$(blkid -s LABEL -o value "/dev/${part##*/}" 2>/dev/null)
+        if [[ "${label}" == "${_MISO_PERSIST_LABEL}" ]]; then
+            echo "/dev/${part##*/}"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# args: message -- mirrors miso_luks's own plymouth-if-running, plain
+# stderr otherwise pattern for surfacing a non-fatal boot-time warning.
+_miso_persist_warn() {
+    local message="${1}"
+    if command -v plymouth >/dev/null 2>&1 && plymouth --ping 2>/dev/null; then
+        plymouth display-message --text="${message}"
+    else
+        echo "${message}" >&2
+    fi
+}
+
+# args: /path/to/newroot
+_miso_persist_apply_overlay() {
+    local newroot="${1}"
+    local persist_dev
+    local persist_mnt="/run/mabox-snapshot/persist"
+    local lower="/run/mabox-snapshot/persist_lower"
+    local upper="${persist_mnt}/upper"
+    local work="${persist_mnt}/work"
+
+    udevadm settle --timeout=5 2>/dev/null
+
+    persist_dev=$(_miso_persist_find_device)
+    if [[ -z "${persist_dev}" ]]; then
+        msg ":: No ${_MISO_PERSIST_LABEL} partition found, continuing without persistence."
+        return 0
+    fi
+
+    mkdir -p "${persist_mnt}"
+    if ! mount -t ext4 -o rw "${persist_dev}" "${persist_mnt}"; then
+        _miso_persist_warn "Found ${_MISO_PERSIST_LABEL} but failed to mount it -- continuing without persistence."
+        return 0
+    fi
+
+    mkdir -p "${upper}" "${work}"
+
+    mkdir -p "${lower}"
+    if ! mount --bind "${newroot}" "${lower}"; then
+        _miso_persist_warn "Failed to prepare root for persistence -- continuing without persistence."
+        umount "${persist_mnt}" 2>/dev/null
+        return 0
+    fi
+
+    # index=off: overlayfs's directory-entry index tracking assumes a
+    # single overlay instance owns its lowerdir; since our lowerdir is
+    # itself an overlay mount (nested), leaving it on risks inode/rename
+    # inconsistencies -- upstream's own documented mitigation for exactly
+    # this "overlay as lower layer" case.
+    if ! mount -t overlay overlay -o lowerdir="${lower}",upperdir="${upper}",workdir="${work}",index=off "${newroot}"; then
+        _miso_persist_warn "Failed to mount persistence overlay -- continuing without persistence."
+        umount "${lower}" 2>/dev/null
+        umount "${persist_mnt}" 2>/dev/null
+        return 0
+    fi
+
+    msg ":: Persistence overlay active (${_MISO_PERSIST_LABEL})."
+}
+
+run_hook() {
+    # Whatever miso/miso_luks (and possibly miso_loop_mnt/miso_pxe_*, if
+    # this boot used one of those alt sources) already left mount_handler
+    # set to -- see this file's header comment for why this hook loads
+    # last among the miso_* hooks and chains dynamically rather than
+    # calling miso_mount_handler by name directly.
+    _miso_persist_prev_mount_handler="${mount_handler}"
+    mount_handler="miso_persist_mount_handler"
+}
+
+# args: /path/to/newroot -- installed as mount_handler in place of
+# whatever handler run_hook() found already set (see above); runs that
+# saved handler first, then layers the persistence overlay on top of its
+# result.
+miso_persist_mount_handler() {
+    local newroot="${1}"
+
+    if [[ -n "${_miso_persist_prev_mount_handler}" ]]; then
+        "${_miso_persist_prev_mount_handler}" "${newroot}"
+    else
+        miso_mount_handler "${newroot}"
+    fi
+    _miso_persist_apply_overlay "${newroot}"
+}
+
+# vim:ft=sh:ts=4:sw=4:et:

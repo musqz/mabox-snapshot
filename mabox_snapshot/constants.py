@@ -130,12 +130,18 @@ GRUB_UNICODE_FONT = Path("/usr/share/grub/unicode.pf2")
 
 # Verified at /usr/share/manjaro-tools/mkinitcpio.conf (manjaro-tools-iso-git
 # package) -- the exact HOOKS/MODULES a live ISO's initramfs needs for the
-# miso boot hook to run.
+# miso boot hook to run. miso_persist MUST stay listed after
+# miso_loop_mnt/miso_pxe_* -- each of those conditionally overwrites
+# mount_handler for its own alt-boot-source (img_loop=, PXE net params);
+# miso_persist chains onto whatever mount_handler is set at the time its
+# own run_hook() runs, so loading before them would have its wrapping
+# silently discarded whenever one of those paths triggers. See
+# configs/initcpio/hooks/miso_persist's header comment for the full story.
 MKINITCPIO_MISO_MODULES = ["loop", "dm-snapshot"]
 MKINITCPIO_MISO_HOOKS = [
     "base", "udev", "miso_shutdown", "miso", "miso_loop_mnt",
     "miso_pxe_common", "miso_pxe_http", "miso_pxe_nbd", "miso_pxe_nfs",
-    "miso_kms", "modconf", "block", "filesystems", "keyboard", "keymap",
+    "miso_persist", "miso_kms", "modconf", "block", "filesystems", "keyboard", "keymap",
 ]
 
 # --encrypt builds only (preserving mode, opt-in): a wholly separate hook
@@ -149,13 +155,36 @@ MKINITCPIO_MISO_LUKS_MODULES = ["loop", "dm-snapshot", "dm-crypt"]
 MKINITCPIO_MISO_LUKS_HOOKS = [
     "base", "udev", "miso_shutdown", "miso_luks", "miso_loop_mnt",
     "miso_pxe_common", "miso_pxe_http", "miso_pxe_nbd", "miso_pxe_nfs",
-    "miso_kms", "modconf", "block", "filesystems", "keyboard", "keymap",
+    "miso_persist", "miso_kms", "modconf", "block", "filesystems", "keyboard", "keymap",
 ]
 
 # Installed by packaging/PKGBUILD alongside the package itself -- the only
 # signal cli.py has that an --encrypt build is possible on this host (same
 # precedent as seed.py's MABOX_SKEL_DIR check).
 MISO_LUKS_HOOK_INSTALLED = Path("/usr/lib/initcpio/hooks/miso_luks")
+
+# Persistent-USB boot hook (see configs/initcpio/{hooks,install}/
+# miso_persist and docs/superpowers/specs/2026-08-20-persistent-usb-design.md).
+# Always included in both HOOKS lists above -- unlike miso_luks, there is no
+# unencrypted/encrypted split to make here: miso_persist is a no-op at boot
+# whenever no MABOX_PERSIST partition is found, so shipping it unconditionally
+# is safe. Vendored by this package (like miso_luks, not manjaro-tools-iso-git)
+# -- installed by packaging/PKGBUILD, checked the same way
+# MISO_LUKS_HOOK_INSTALLED is (see isobuild.check_miso_persist_hook_installed()),
+# just unconditionally rather than only under --encrypt.
+MISO_PERSIST_HOOK_INSTALLED = Path("/usr/lib/initcpio/hooks/miso_persist")
+
+# Cross-repo contract with mabox-persistence-usb's isoinspect.
+# evaluate_hook_support(): a plain-text version marker written inside the
+# ISO9660 tree (see isobuild.write_persist_hook_marker()), parallel to
+# assemble()'s existing ".miso" marker convention -- lets that tool tell
+# whether an ISO's initramfs actually includes miso_persist without
+# decompressing and walking the initramfs cpio itself. Must stay in sync by
+# hand with mabox_persistence_usb.constants.PERSIST_HOOK_MARKER_PATH /
+# MIN_SUPPORTED_HOOK_VERSION -- the two repos share no runtime code, same
+# manual-sync precedent as ISO_VOLID above.
+PERSIST_HOOK_MARKER_RELPATH = Path(MISO_BASEDIR) / ".persist-hook-version"
+PERSIST_HOOK_VERSION = 1
 
 # Everything MKINITCPIO_MISO_HOOKS/MKINITCPIO_MISO_LUKS_HOOKS reference that
 # isn't a stock mkinitcpio hook and isn't miso_luks (vendored above): comes

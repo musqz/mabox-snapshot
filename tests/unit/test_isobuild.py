@@ -80,6 +80,25 @@ def test_check_miso_hook_binaries_installed_passes_when_present(monkeypatch):
     isobuild.check_miso_hook_binaries_installed(["curl", "nbd-client"])  # must not raise
 
 
+def test_write_persist_hook_marker_writes_version_under_miso_basedir(tmp_path):
+    dest = isobuild.write_persist_hook_marker(tmp_path, version=1, relpath=Path("mabox/.persist-hook-version"))
+
+    assert dest == tmp_path / "mabox" / ".persist-hook-version"
+    assert dest.read_text() == "1\n"
+
+
+def test_check_miso_persist_hook_installed_raises_when_missing(tmp_path):
+    with pytest.raises(FileNotFoundError, match="persistence boot hook"):
+        isobuild.check_miso_persist_hook_installed(tmp_path / "miso_persist")
+
+
+def test_check_miso_persist_hook_installed_passes_when_present(tmp_path):
+    hook_path = tmp_path / "miso_persist"
+    hook_path.write_text("# hook")
+
+    isobuild.check_miso_persist_hook_installed(hook_path)  # must not raise
+
+
 def test_write_checksum_matches_sha256sum_format(tmp_path):
     iso = tmp_path / "mabox-reset-20260823.iso"
     iso.write_bytes(b"fake iso contents")

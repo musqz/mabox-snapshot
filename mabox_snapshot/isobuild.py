@@ -62,6 +62,13 @@ def check_miso_hook_binaries_installed(binaries: list[str] = constants.MISO_EXTE
         )
 
 
+def check_miso_persist_hook_installed(hook_path: Path = constants.MISO_PERSIST_HOOK_INSTALLED) -> None:
+    if not hook_path.exists():
+        raise FileNotFoundError(
+            f"persistence boot hook not found at {hook_path} -- is mabox-snapshot installed via its package?"
+        )
+
+
 def build_initramfs(kver: str, conf_path: Path, dest: Path) -> None:
     subprocess.run(build_mkinitcpio_command(kver, conf_path, dest), check=True)
 
@@ -180,8 +187,23 @@ def build_xorriso_command(iso_root: Path, dest: Path, volid: str) -> list[str]:
     ]
 
 
+def write_persist_hook_marker(
+    iso_root: Path,
+    version: int = constants.PERSIST_HOOK_VERSION,
+    relpath: Path = constants.PERSIST_HOOK_MARKER_RELPATH,
+) -> Path:
+    """Advertises miso_persist support to mabox-persistence-usb's
+    isoinspect.evaluate_hook_support() -- see
+    constants.PERSIST_HOOK_MARKER_RELPATH for the cross-repo contract."""
+    dest = iso_root / relpath
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(f"{version}\n")
+    return dest
+
+
 def assemble(iso_root: Path, dest: Path, volid: str = constants.ISO_VOLID) -> None:
     (iso_root / ".miso").touch()
+    write_persist_hook_marker(iso_root)
     subprocess.run(build_xorriso_command(iso_root, dest, volid), check=True)
 
 

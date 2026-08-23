@@ -1,0 +1,17 @@
+#!/bin/bash
+
+build() {
+    # Already loaded by miso/miso_luks (this hook always runs after one of
+    # them, see mabox_snapshot.constants.MKINITCPIO_MISO_HOOKS /
+    # MKINITCPIO_MISO_LUKS_HOOKS) -- repeated here so this hook stays
+    # self-contained if its HOOKS position ever changes. blkid/mount/umount/
+    # mkdir/readlink need no add_binary of their own: base's own install
+    # script already adds blkid + mount/umount, and mkdir/readlink come
+    # from busybox (base adds every busybox applet) -- same precedent
+    # miso/miso_luks already rely on for those same calls.
+    add_module "overlay"
+
+    add_runscript
+}
+
+# vim: set ft=sh ts=4 sw=4 et:

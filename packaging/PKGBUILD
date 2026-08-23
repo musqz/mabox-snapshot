@@ -67,6 +67,11 @@ package() {
     install -Dm644 configs/initcpio/install/miso_luks \
         "$pkgdir/usr/lib/initcpio/install/miso_luks"
 
+    install -Dm644 configs/initcpio/hooks/miso_persist \
+        "$pkgdir/usr/lib/initcpio/hooks/miso_persist"
+    install -Dm644 configs/initcpio/install/miso_persist \
+        "$pkgdir/usr/lib/initcpio/install/miso_persist"
+
     sed "s/@VERSION@/$pkgver/" man/mabox-snapshot.1 > man/mabox-snapshot.1.built
     install -Dm644 man/mabox-snapshot.1.built \
         "$pkgdir/usr/share/man/man1/mabox-snapshot.1"
