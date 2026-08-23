@@ -28,6 +28,6 @@ pkgbase = mabox-snapshot
 	optdepends = bash-completion: tab-completion for the mabox-snapshot CLI
 	backup = etc/mabox-snapshot/excludes.list
 	source = mabox-snapshot-0.2.1.tar.gz::https://github.com/musqz/mabox-snapshot/archive/refs/tags/v0.2.1.tar.gz
-	sha256sums = SKIP
+	sha256sums = 62e443fe3a77973e5b56a285878aa3898c325c704976ae7296b7928973e831d4
 
 pkgname = mabox-snapshot
