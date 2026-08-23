@@ -66,6 +66,10 @@ package() {
     install -Dm644 configs/initcpio/install/miso_luks \
         "$pkgdir/usr/lib/initcpio/install/miso_luks"
 
+    sed "s/@VERSION@/$pkgver/" man/mabox-snapshot.1 > man/mabox-snapshot.1.built
+    install -Dm644 man/mabox-snapshot.1.built \
+        "$pkgdir/usr/share/man/man1/mabox-snapshot.1"
+
     install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 
     # Umask-safety pass -- see mabox_snapshot/permissions.py's docstring for
