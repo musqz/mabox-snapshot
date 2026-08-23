@@ -9,6 +9,15 @@
 - Added `-h` epilog examples to `config`, `config set`, `excludes`, `excludes add/remove`, and
   `excludes rules`/`rules add/remove` -- surfaces the CLI-flag-to-config-key naming convention and
   the `excludes rules` include/exclude combo without needing to drill through multiple `-h` levels.
+- Added a man page (`man/mabox-snapshot.1`), installed by the package; its `@VERSION@` placeholder
+  is substituted with `$pkgver` by PKGBUILD at package time, so the tracked source never needs a
+  manual version bump.
+- Added a test suite check that `VERSION`, `__init__.py`, `pyproject.toml`, and `PKGBUILD`'s
+  `pkgver` all agree, to catch release-time version drift (pyproject.toml/__init__.py weren't
+  covered by the AUR release checklist before).
+- Fixed `packaging/.SRCINFO`, which was stale -- it described an unrelated `mabox-snapshot-git`
+  package variant instead of matching the current `PKGBUILD`. Regenerated with `makepkg
+  --printsrcinfo`.
 
 ## 0.1.0
 

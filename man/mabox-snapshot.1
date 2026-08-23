@@ -1,0 +1,231 @@
+.TH MABOX-SNAPSHOT 1 "2026-08-23" "mabox-snapshot @VERSION@" "User Commands"
+.SH NAME
+mabox-snapshot \- snapshot a running Mabox Linux system into a bootable live/install ISO
+.SH SYNOPSIS
+.B mabox-snapshot
+.RI [ -h ]
+.I command
+.RI [ args ...]
+.SH DESCRIPTION
+.B mabox-snapshot
+builds a bootable live/install ISO from the currently running Mabox Linux
+system. It is modeled on MX Linux's
+.B mx-snapshot
+but is not a port of it -- Mabox is Manjaro-based, with its own repo
+layering, versioned multi-kernel packaging, and desktop bootstrap
+(jgmenu/tint2/openbox) that a generic Arch tool doesn't account for.
+.PP
+Two build modes are supported:
+.TP
+.B preserving
+A full personal clone: real /home, real accounts, real passwords. For
+migrating to new hardware or backing up your own machine, not for sharing.
+Optionally LUKS2-encrypted with
+.BR --encrypt .
+Calamares' own account-creation step is skipped, since the snapshot already
+.I is
+your account.
+.TP
+.B reset
+A sanitized ISO for sharing: a synthetic demo/demo account replaces the real
+user, no real /home, no saved network credentials, no machine ID.
+.SH COMMANDS
+.SS version
+Print the installed version.
+.SS doctor
+Check prerequisites (required tools, disk space, detected kernels).
+Read-only, no root needed.
+.SS "create --mode {preserving,reset} [options]"
+Build a snapshot. Requires root. Options:
+.TP
+.B --mode {preserving,reset}
+Build mode; required.
+.TP
+.BR -w ", " --workdir " " \fIDIR\fR
+Scratch directory for build state -- squashfs layers, ISO tree, mkinitcpio
+config (default: /var/lib/mabox-snapshot/work).
+.TP
+.BR -o ", " --skip-space-check
+Skip the free-space precheck on workdir/output-dir before building.
+.TP
+.B --output-dir \fIDIR\fR
+Directory the finished ISO is written to (default: same as --workdir).
+.TP
+.B --iso-name \fINAME\fR
+Base filename for the ISO, without .iso (default: mabox-<mode>-<timestamp>).
+.TP
+.B --compression {zstd,xz,lz4,lzo,gzip}
+Squashfs compression algorithm passed to mksquashfs -comp (default: zstd).
+xz compresses smallest but slowest; gzip is a universal fallback with a
+weaker ratio; lz4/lzo are fastest but produce the largest output.
+.TP
+.B --compression-level \fILEVEL\fR
+Compression level passed to mksquashfs -Xcompression-level. Only zstd
+(1-22, default 15), gzip (1-9, default 9), and lzo (1-9, default 8) support
+this -- xz and lz4 have no such option and will error if a level is given.
+.TP
+.B --exclude-list \fIFILE\fR
+Path to a custom exclude-pattern file, replacing the default list (default:
+/etc/mabox-snapshot/excludes.list).
+.TP
+.B --exclude-folder {Desktop,Documents,Downloads,Music,Pictures,Videos,Public,Templates}
+Exclude a named XDG user folder from the snapshot in addition to
+--exclude-list; repeatable.
+.TP
+.B --kernel \fINAME\fR
+Only include this installed kernel, matched against mkinitcpio presets
+(default: newest installed kernel).
+.TP
+.B --all-kernels
+Include every installed kernel instead of just the newest.
+.TP
+.B --dry-run
+Print the resolved plan and commands, execute nothing.
+.TP
+.B --change-threshold-mb \fIMB\fR
+Prompt about home-dir items new/grown by at least this many MiB since the
+last snapshot (default: 200).
+.TP
+.B --encrypt
+Encrypt rootfs.sfs with LUKS2 (preserving mode only; passphrase prompted
+interactively at build time).
+.TP
+.B --profile {full,lean}
+Size/completeness tier: full (default) or lean, which trims unselected
+kernels' module trees plus VM/container storage.
+.TP
+.BR -n ", " --no-checksums
+Skip writing a .sha256 checksum file alongside the ISO.
+.SS "config {show,path,set}"
+Inspect or edit the cascading TOML configuration (built-in defaults ->
+system file -> user file -> CLI flags). Config keys match CLI flag names
+with dashes replaced by underscores, e.g.
+.B --output-dir
+becomes
+.BR output_dir .
+.TP
+.B show
+Print the resolved config.
+.TP
+.B path
+List config files in load order.
+.TP
+.BI "set " key " " value
+Set a key in the user config.
+.SS "excludes {list,edit,add,remove,reset,folders,rules}"
+Manage what a snapshot excludes.
+.TP
+.B list
+Print the current exclude list.
+.TP
+.B edit
+Open the exclude list in $EDITOR.
+.TP
+.B reset
+Restore the shipped default exclude list.
+.TP
+.B folders
+List named XDG folders and their resolved paths.
+.TP
+.BI "add " pattern
+Add an mksquashfs -ef exclude pattern, relative to /, e.g. var/cache/*.
+.TP
+.BI "remove " pattern
+Remove a pattern, as printed by
+.BR "excludes list" .
+.TP
+.B "rules {list,add,remove,clear,edit}"
+Ordered include/exclude override rules, for keeping one subpath inside an
+otherwise-excluded directory (e.g. one folder under Documents).
+.RS
+.TP
+.BI "rules add " action " " pattern
+.I action
+is
+.B exclude
+or
+.BR include ;
+.I pattern
+is a path relative to /, e.g. home/*/Documents (glob allowed on exclude
+rules only).
+.TP
+.BI "rules remove " action " " pattern
+Remove a rule, as printed by
+.BR "excludes rules list" .
+.TP
+.B "rules clear"
+Remove all override rules.
+.TP
+.B "rules edit"
+Open the override-rules file in $EDITOR.
+.RE
+.SS "packages list [--explicit|--aur|--local|--all]"
+List installed packages, read-only, no root needed. --explicit lists
+explicit repo packages (default); --aur lists foreign packages reproducible
+from the AUR; --local lists foreign packages found in neither; --all
+combines all three.
+.SS "skel audit [--home \fIDIR\fR] [--show-identical]"
+Reporting only -- nothing here changes what a snapshot captures. Diffs your
+home directory against the vendored mabox-skel baseline to show what's
+untouched, customized, deleted, or fully your own. Use the 'differs' list
+to decide what's worth protecting with
+.B "excludes rules add include ..."
+in a leaner snapshot profile.
+.SH FILES
+.TP
+.I /etc/mabox-snapshot/mabox-snapshot.conf
+System-wide config.
+.TP
+.I ~/.config/mabox-snapshot/mabox-snapshot.conf
+Per-user config, takes precedence over the system file.
+.TP
+.I /etc/mabox-snapshot/excludes.list
+Default exclude list, editable via
+.BR excludes .
+.TP
+.I /etc/mabox-snapshot/overrides.list
+Ordered include/exclude override rules, editable via
+.BR "excludes rules" .
+.TP
+.I /etc/mabox-snapshot/images/splash.png
+Optional custom GRUB boot menu background; auto-resized/cropped to
+1920x1080 if present.
+.TP
+.I /var/lib/mabox-snapshot/work
+Default scratch/work directory.
+.SH EXAMPLES
+Check prerequisites, then build a full personal backup to a mounted USB
+drive:
+.RS
+.nf
+mabox-snapshot doctor
+sudo mabox-snapshot create --mode preserving --output-dir /mnt/usb --encrypt
+.fi
+.RE
+.PP
+Build a sanitized ISO to share, with every installed kernel:
+.RS
+.nf
+mabox-snapshot create --mode reset --output-dir /mnt/usb --all-kernels
+.fi
+.RE
+.PP
+Persist a backup destination, then keep one subpath inside an
+otherwise-excluded directory:
+.RS
+.nf
+mabox-snapshot config set output_dir /mnt/backups/mabox-snapshots
+mabox-snapshot excludes rules add exclude 'home/*/Documents/*'
+mabox-snapshot excludes rules add include home/*/Documents/keep-this
+.fi
+.RE
+.SH EXIT STATUS
+.B 0
+on success, non-zero on error.
+.B doctor
+also returns non-zero if any prerequisite check fails.
+.SH SEE ALSO
+Full documentation and source:
+.I https://github.com/musqz/mabox-snapshot
+.SH AUTHOR
+musqz
