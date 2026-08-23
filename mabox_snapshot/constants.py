@@ -18,6 +18,13 @@ EXCLUDES_LIST_DEFAULT = Path("/usr/share/mabox-snapshot/excludes.list.default")
 # by default, no shipped default to reset to.
 OVERRIDE_RULES_FILE = Path("/etc/mabox-snapshot/overrides.list")
 
+# Per-user, not per-system: a reset's pre-overwrite backup (and any named
+# template saved via 'excludes backups save <name>') is the invoking user's
+# own customization history, not shipped/system config -- lives under their
+# real home (see privilege.resolve_effective_home()), joined to this at
+# call time, not a standalone absolute path like the /etc ones above.
+EXCLUDES_BACKUPS_DIRNAME = Path(".config/mabox-snapshot/excludes-backups")
+
 NAMED_FOLDERS = ["Desktop", "Documents", "Downloads", "Music", "Pictures", "Videos", "Public", "Templates"]
 
 ISO_NAME_PREFIX = "mabox-"

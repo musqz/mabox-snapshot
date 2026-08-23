@@ -50,7 +50,14 @@ _mabox_snapshot_excludes() {
     local subcmd=${words[2]} subsubcmd=${words[3]}
 
     if [[ $cword -eq 2 ]]; then
-        COMPREPLY=($(compgen -W "list edit reset folders add remove rules -h --help" -- "$cur"))
+        COMPREPLY=($(compgen -W "list edit reset folders add remove backups rules -h --help" -- "$cur"))
+        return
+    fi
+
+    if [[ "$subcmd" == "backups" ]]; then
+        if [[ $cword -eq 3 ]]; then
+            COMPREPLY=($(compgen -W "list save restore -h --help" -- "$cur"))
+        fi
         return
     fi
 

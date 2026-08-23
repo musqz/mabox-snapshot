@@ -34,6 +34,16 @@ def resolve_home_dir() -> Path:
     return Path(f"/home/{sudo_user}")
 
 
+def resolve_effective_home() -> Path:
+    """The home dir this invocation's own per-user files (excludes backups,
+    etc.) belong under. Some excludes subcommands (backups save/list) need
+    no root and may be run bare; others (reset, backups restore) always run
+    under sudo -- resolve_home_dir() there, since Path.home() would silently
+    resolve to /root's. Path.home() otherwise, for a genuinely unprivileged
+    invocation."""
+    return resolve_home_dir() if is_root() else Path.home()
+
+
 def fail(message: str) -> None:
     print(f"error: {message}", file=sys.stderr)
     raise SystemExit(1)
