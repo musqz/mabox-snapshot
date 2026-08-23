@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Added the `miso_persist` initramfs hook: every ISO now boots with support for an optional
+  `MABOX_PERSIST`-labeled ext4 overlay partition on the boot device, so changes made while running
+  from a USB stick can survive a reboot. A no-op when that partition isn't present -- plain and
+  `--encrypt` builds boot exactly as before. The actual partition is written by the separate
+  `mabox-persistence-usb` tool; this only ships the boot-time half. Every built ISO also now carries
+  a `mabox/.persist-hook-version` marker so `mabox-persistence-usb` can tell whether a given ISO
+  supports it. Unverified on real hardware/QEMU in this session -- see
+  `docs/superpowers/specs/2026-08-20-persistent-usb-design.md`.
+
 ## 0.2.3
 
 - Fixed `excludes add/remove/reset/edit` and `excludes rules add/remove/clear/edit` crashing with a raw
