@@ -71,7 +71,7 @@ usage: mabox-snapshot create [-h] --mode {preserving,reset} [-w WORKDIR] [-o]
                               [--kernel KERNEL] [--all-kernels] [--dry-run]
                               [--change-threshold-mb CHANGE_THRESHOLD_MB]
                               [--encrypt]
-                              [--profile {full,lean}]
+                              [--profile {full,lean}] [-n]
 
 Build a bootable live/install ISO from the running system.
 
@@ -128,6 +128,7 @@ options:
                         behavior) or lean (trims unselected kernels' module
                         trees plus VM/container storage; see 'mabox-snapshot
                         skel audit' to curate further)
+  -n, --no-checksums    Skip writing a .sha256 checksum file alongside the ISO
 
 example:
   mabox-snapshot create --mode reset --output-dir /mnt/usb --all-kernels

@@ -2,9 +2,9 @@
 modeled directly on Manjaro's own /usr/lib/manjaro-tools/util-iso.sh
 (assemble_iso) and util-iso-boot.sh (prepare_grub), both verified present
 and read on this host. Deliberately dropped as out of scope for a
-single-rootfs personal-snapshot tool: GPG signing, checksums, snap
-seeding, the desktopfs/mhwdfs multi-layer split, and grubenv's
-menu_show_once persistence flag.
+single-rootfs personal-snapshot tool: GPG signing, snap seeding, the
+desktopfs/mhwdfs multi-layer split, and grubenv's menu_show_once
+persistence flag.
 
 The FAT efi.img is built with a plain `mount -o loop` (auto-managed loop
 device) rather than manjaro-tools' manual losetup/track_img bookkeeping --
@@ -14,6 +14,7 @@ images; this tool only ever builds one.
 
 from __future__ import annotations
 
+import hashlib
 import shutil
 import subprocess
 from pathlib import Path
@@ -182,3 +183,15 @@ def build_xorriso_command(iso_root: Path, dest: Path, volid: str) -> list[str]:
 def assemble(iso_root: Path, dest: Path, volid: str = constants.ISO_VOLID) -> None:
     (iso_root / ".miso").touch()
     subprocess.run(build_xorriso_command(iso_root, dest, volid), check=True)
+
+
+def write_checksum(dest: Path) -> Path:
+    """Writes dest's sha256 as <dest>.sha256, in standard `sha256sum`
+    output format so `sha256sum -c` verifies it from the same directory."""
+    digest = hashlib.sha256()
+    with dest.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(chunk)
+    checksum_path = dest.with_name(dest.name + ".sha256")
+    checksum_path.write_text(f"{digest.hexdigest()}  {dest.name}\n")
+    return checksum_path

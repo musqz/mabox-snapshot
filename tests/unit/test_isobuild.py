@@ -1,3 +1,4 @@
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -77,3 +78,14 @@ def test_check_miso_hook_binaries_installed_lists_each_missing_binary(monkeypatc
 def test_check_miso_hook_binaries_installed_passes_when_present(monkeypatch):
     monkeypatch.setattr(isobuild.shutil, "which", lambda b: f"/usr/bin/{b}")
     isobuild.check_miso_hook_binaries_installed(["curl", "nbd-client"])  # must not raise
+
+
+def test_write_checksum_matches_sha256sum_format(tmp_path):
+    iso = tmp_path / "mabox-reset-20260823.iso"
+    iso.write_bytes(b"fake iso contents")
+
+    checksum_path = isobuild.write_checksum(iso)
+
+    assert checksum_path == tmp_path / "mabox-reset-20260823.iso.sha256"
+    expected = hashlib.sha256(iso.read_bytes()).hexdigest()
+    assert checksum_path.read_text() == f"{expected}  {iso.name}\n"
