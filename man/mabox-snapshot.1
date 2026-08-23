@@ -113,7 +113,7 @@ List config files in load order.
 .TP
 .BI "set " key " " value
 Set a key in the user config.
-.SS "excludes {list,edit,add,remove,reset,folders,rules}"
+.SS "excludes {list,edit,add,remove,reset,folders,backups,rules}"
 Manage what a snapshot excludes.
 .I /etc/mabox-snapshot/excludes.list
 and
@@ -123,6 +123,10 @@ are root-owned, so every subcommand that writes to them needs
 .B list
 ,
 .B folders
+,
+.B "backups list"
+,
+.B "backups save"
 , and
 .B "rules list"
 are read-only and need no root.
@@ -134,7 +138,10 @@ Print the current exclude list. Read-only, no root.
 Open the exclude list in $EDITOR. Root required.
 .TP
 .B reset
-Restore the shipped default exclude list. Root required.
+Restore the shipped default exclude list. Root required. Always saves a
+timestamped backup of the list it's about to replace first (see
+.B backups
+below), so this is never a one-way trip.
 .TP
 .B folders
 List named XDG folders and their resolved paths. Read-only, no root.
@@ -147,6 +154,35 @@ Root required.
 Remove a pattern, as printed by
 .BR "excludes list" .
 Root required.
+.TP
+.B "backups {list,save,restore}"
+Saved copies of the exclude list, under
+.IR ~/.config/mabox-snapshot/excludes-backups .
+.B reset
+writes one automatically; a named
+.B save
+doubles as a reusable custom template you can
+.B restore
+later.
+.RS
+.TP
+.B "backups list"
+List saved backups and named templates. Read-only, no root.
+.TP
+.BI "backups save " "[name]"
+Save the current exclude list as a backup. With a name, it becomes a
+reusable template (e.g.
+.BR vm-heavy );
+omitted, it's timestamped instead. Read-only, no root -- reads the
+world-readable
+.I excludes.list
+and writes only to your own home.
+.TP
+.BI "backups restore " name
+Restore the exclude list from a saved backup or template, as printed by
+.BR "excludes backups list" .
+Root required.
+.RE
 .TP
 .B "rules {list,add,remove,clear,edit}"
 Ordered include/exclude override rules, for keeping one subpath inside an
@@ -205,6 +241,10 @@ Default exclude list, editable via
 Ordered include/exclude override rules, editable via
 .BR "excludes rules" .
 .TP
+.I ~/.config/mabox-snapshot/excludes-backups/
+Exclude-list backups and named templates, managed via
+.BR "excludes backups" .
+.TP
 .I /etc/mabox-snapshot/images/splash.png
 Optional custom GRUB boot menu background; auto-resized/cropped to
 1920x1080 if present.
@@ -235,6 +275,15 @@ otherwise-excluded directory:
 mabox-snapshot config set output_dir /mnt/backups/mabox-snapshots
 sudo mabox-snapshot excludes rules add exclude 'home/*/Documents/*'
 sudo mabox-snapshot excludes rules add include home/*/Documents/keep-this
+.fi
+.RE
+.PP
+Save the current exclude list as a reusable template, then restore it later:
+.RS
+.nf
+mabox-snapshot excludes backups save vm-heavy
+mabox-snapshot excludes backups list
+sudo mabox-snapshot excludes backups restore vm-heavy
 .fi
 .RE
 .SH EXIT STATUS

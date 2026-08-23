@@ -8,6 +8,7 @@ import os
 import shutil
 import subprocess
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from . import constants, kernels
@@ -63,6 +64,49 @@ def _normalize_pattern(pattern: str) -> str:
     return normalized
 
 
+class InvalidBackupNameError(ValueError):
+    """A user-typed name for 'excludes backups save'/'restore' -- these
+    become a filename directly under the backups directory, so this is a
+    filename-safety check, unrelated to InvalidPatternError above (which
+    guards mksquashfs -ef pattern syntax, not filenames)."""
+
+
+def _normalize_backup_name(name: str) -> str:
+    name = name.strip()
+    if not name or "/" in name or name in (".", ".."):
+        raise InvalidBackupNameError(f"invalid backup name: {name!r}")
+    return name
+
+
+BACKUP_TIMESTAMP_FORMAT = "%d-%m-%Y-%H%M"  # matches cli.py's ISO filename stamp
+
+
+def list_backups(backups_dir: Path) -> list[Path]:
+    if not backups_dir.exists():
+        return []
+    return sorted(backups_dir.glob("*.bak"))
+
+
+def resolve_backup(backups_dir: Path, name: str) -> Path:
+    """Resolves a bare name (as printed by 'excludes backups list', with or
+    without its '.bak' suffix) to the backup file it refers to. Rejects a
+    name shaped so it could resolve outside backups_dir -- e.g. an absolute
+    path makes pathlib's '/' operator discard backups_dir entirely
+    (Path('/a/b') / '/etc/shadow' == Path('/etc/shadow')), and a '..'
+    component escapes it via the filesystem once resolved. Same guard
+    backup() already applies when writing one, applied symmetrically here
+    when reading one back -- otherwise 'excludes backups restore
+    /etc/shadow' would silently copy arbitrary file content into the live
+    excludes.list instead of failing with 'no backup named ...'."""
+    _normalize_backup_name(name)
+    candidate = backups_dir / name
+    if not candidate.exists():
+        candidate = backups_dir / f"{name}.bak"
+    if not candidate.exists():
+        raise FileNotFoundError(f"no backup named {name!r} in {backups_dir} (see 'excludes backups list')")
+    return candidate
+
+
 class ExcludeList:
     """Wraps the persisted, user-editable exclude-list file."""
 
@@ -92,13 +136,58 @@ class ExcludeList:
     def remove(self, pattern: str) -> None:
         self._save([p for p in self.load() if p != pattern])
 
-    def reset(self, default_source: Path = constants.EXCLUDES_LIST_DEFAULT) -> None:
+    def backup(self, backups_dir: Path, name: str | None = None) -> Path | None:
+        """Copies the current list into backups_dir before it's about to be
+        overwritten (by reset()) or on an explicit named save -- either way
+        a way back to it always exists. A name doubles as a reusable
+        template (e.g. 'vm-heavy') and is overwritten on a repeat save by
+        design (that's how you update a template); omitted, it's
+        timestamped instead, same shape as cli.py's ISO filename stamp --
+        that path never overwrites, since two auto-backups within the same
+        clock-minute would otherwise silently destroy the first one,
+        defeating the whole "never a one-way trip" point of this method.
+        `if name is not None` (not truthy `if name`), so an explicitly
+        empty name is rejected by _normalize_backup_name() below rather
+        than silently falling back to a timestamp -- checked before the
+        exists() short-circuit further down, so a bad name is never masked
+        by "nothing to back up yet" on a fresh install. Returns None
+        (no-op, nothing to lose) if there's no list on disk yet."""
+        if name is not None:
+            _normalize_backup_name(name)
+        if not self.path.exists():
+            return None
+        backups_dir.mkdir(parents=True, exist_ok=True)
+        if name is not None:
+            filename = f"{name}.bak"
+        else:
+            stamp = datetime.now().strftime(BACKUP_TIMESTAMP_FORMAT)
+            filename = f"excludes-{stamp}.bak"
+            suffix = 2
+            while (backups_dir / filename).exists():
+                filename = f"excludes-{stamp}-{suffix}.bak"
+                suffix += 1
+        dest = backups_dir / filename
+        shutil.copyfile(self.path, dest)
+        return dest
+
+    def restore(self, backup_path: Path) -> None:
+        if not backup_path.exists():
+            raise FileNotFoundError(f"no such backup: {backup_path}")
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(backup_path, self.path)
+
+    def reset(self, default_source: Path = constants.EXCLUDES_LIST_DEFAULT, backups_dir: Path | None = None) -> Path | None:
+        """Returns the backup path written (if backups_dir was given and
+        there was a prior list to save), so the caller can tell the user
+        where their previous list went."""
         if not default_source.exists():
             raise FileNotFoundError(
                 f"shipped default not found at {default_source} -- is mabox-snapshot installed via its package?"
             )
+        backed_up = self.backup(backups_dir) if backups_dir is not None else None
         self.path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(default_source, self.path)
+        return backed_up
 
     def edit(self) -> int:
         if not self.path.exists():

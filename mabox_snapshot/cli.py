@@ -571,17 +571,78 @@ def cmd_excludes_remove(args: argparse.Namespace) -> int:
     return 0
 
 
+def _resolve_excludes_backups_dir() -> Path | None:
+    """None means resolution failed and an error was already printed --
+    the only real failure mode is running as literal root instead of via
+    sudo (privilege.NoSudoUserError), since is_root() is otherwise False
+    for a genuinely unprivileged invocation and needs no SUDO_USER at all."""
+    try:
+        return privilege.resolve_effective_home() / constants.EXCLUDES_BACKUPS_DIRNAME
+    except privilege.NoSudoUserError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return None
+
+
 def cmd_excludes_reset(_args: argparse.Namespace) -> int:
     try:
         privilege.require_root("mabox-snapshot excludes reset")
     except privilege.NotRootError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
+    backups_dir = _resolve_excludes_backups_dir()
+    if backups_dir is None:
+        return 1
     try:
-        excludes.ExcludeList().reset()
+        backed_up = excludes.ExcludeList().reset(backups_dir=backups_dir)
     except FileNotFoundError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
+    if backed_up:
+        print(f"backed up previous list to {backed_up}", file=sys.stderr)
+    return 0
+
+
+def cmd_excludes_backups_list(_args: argparse.Namespace) -> int:
+    backups_dir = _resolve_excludes_backups_dir()
+    if backups_dir is None:
+        return 1
+    for backup in excludes.list_backups(backups_dir):
+        print(backup.stem)
+    return 0
+
+
+def cmd_excludes_backups_save(args: argparse.Namespace) -> int:
+    backups_dir = _resolve_excludes_backups_dir()
+    if backups_dir is None:
+        return 1
+    try:
+        saved = excludes.ExcludeList().backup(backups_dir, args.name)
+    except excludes.InvalidBackupNameError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    if saved is None:
+        print(f"error: no exclude list at {constants.EXCLUDES_LIST_FILE} yet -- nothing to save", file=sys.stderr)
+        return 1
+    print(f"saved to {saved}")
+    return 0
+
+
+def cmd_excludes_backups_restore(args: argparse.Namespace) -> int:
+    try:
+        privilege.require_root("mabox-snapshot excludes backups restore")
+    except privilege.NotRootError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    backups_dir = _resolve_excludes_backups_dir()
+    if backups_dir is None:
+        return 1
+    try:
+        backup_path = excludes.resolve_backup(backups_dir, args.name)
+        excludes.ExcludeList().restore(backup_path)
+    except (FileNotFoundError, excludes.InvalidBackupNameError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    print(f"restored from {backup_path}")
     return 0
 
 
@@ -814,6 +875,35 @@ def build_parser() -> argparse.ArgumentParser:
     )
     remove_parser.add_argument("pattern", help="Exact pattern to remove, as printed by 'excludes list'")
     remove_parser.set_defaults(func=cmd_excludes_remove)
+
+    backups_parser = excludes_sub.add_parser(
+        "backups", help="Save/restore exclude-list backups and named templates, under ~/.config/mabox-snapshot/excludes-backups",
+        epilog=(
+            "'reset' always saves a timestamped backup first, so it's never a one-way trip. 'save' does the\n"
+            "same manually, and with a name doubles as a reusable custom template.\n\n"
+            "example:\n"
+            "  sudo mabox-snapshot excludes backups save vm-heavy\n"
+            "  mabox-snapshot excludes backups list\n"
+            "  sudo mabox-snapshot excludes backups restore vm-heavy\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    backups_sub = backups_parser.add_subparsers(dest="backups_command", required=True)
+    backups_sub.add_parser("list", help="List saved backups/templates, read-only, no root").set_defaults(func=cmd_excludes_backups_list)
+    backups_save_parser = backups_sub.add_parser(
+        "save", help="Save the current exclude list as a backup, no root needed",
+        epilog="example:\n  mabox-snapshot excludes backups save vm-heavy\n",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    backups_save_parser.add_argument("name", nargs="?", help="Reusable template name; omit for an auto-timestamped backup")
+    backups_save_parser.set_defaults(func=cmd_excludes_backups_save)
+    backups_restore_parser = backups_sub.add_parser(
+        "restore", help="Restore the exclude list from a backup (root required)",
+        epilog="example:\n  sudo mabox-snapshot excludes backups restore vm-heavy\n",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    backups_restore_parser.add_argument("name", help="Backup name, as printed by 'excludes backups list'")
+    backups_restore_parser.set_defaults(func=cmd_excludes_backups_restore)
 
     rules_parser = excludes_sub.add_parser(
         "rules", help="Ordered include/exclude override rules (e.g. exclude a dir but keep one subpath inside it)",

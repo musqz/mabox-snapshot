@@ -10,6 +10,12 @@
   root, so that's the everyday invocation, but bash only ever dispatches completion off the first word on the
   line (`sudo`), so our completion function never ran for it. Now registered for `sudo` too, only when nothing
   else already claims that slot, so it never overrides completion for other sudo'd commands.
+- Added `excludes backups {list,save,restore}`. `excludes reset` now always backs up the list it's about to
+  replace first (under `~/.config/mabox-snapshot/excludes-backups/`, the invoking user's own, not root's, even
+  under sudo), so it's never a one-way trip. `backups save [name]` does the same manually, and with a name
+  doubles as a reusable custom template you can `backups restore` later. `backups restore <name>` rejects a
+  name shaped like an absolute or `../`-relative path -- unvalidated, it would have resolved outside the
+  backups directory entirely and copied arbitrary file content into the live exclude list.
 
 ## 0.2.2
 

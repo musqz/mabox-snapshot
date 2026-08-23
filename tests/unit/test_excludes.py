@@ -143,6 +143,198 @@ def test_exclude_list_reset_requires_shipped_default(tmp_path):
         pass
 
 
+def test_exclude_list_reset_backs_up_the_previous_list_first(tmp_path):
+    path = tmp_path / "excludes.list"
+    default_source = tmp_path / "excludes.list.default"
+    backups_dir = tmp_path / "backups"
+    default_source.write_text("dev/*\n")
+    el = excludes.ExcludeList(path)
+    el.add("home/*/.cache/custom/*")
+
+    backed_up = el.reset(default_source=default_source, backups_dir=backups_dir)
+
+    assert backed_up is not None
+    assert backed_up.parent == backups_dir
+    assert backed_up.read_text() == "home/*/.cache/custom/*\n"
+    assert el.load() == ["dev/*"]  # the shipped default, not the customized list
+
+
+def test_exclude_list_reset_without_backups_dir_skips_backup(tmp_path):
+    path = tmp_path / "excludes.list"
+    default_source = tmp_path / "excludes.list.default"
+    default_source.write_text("dev/*\n")
+    el = excludes.ExcludeList(path)
+    el.add("home/*/.cache/custom/*")
+
+    backed_up = el.reset(default_source=default_source)
+
+    assert backed_up is None
+    assert el.load() == ["dev/*"]
+
+
+def test_exclude_list_reset_with_no_prior_list_skips_backup(tmp_path):
+    path = tmp_path / "excludes.list"  # never created
+    default_source = tmp_path / "excludes.list.default"
+    default_source.write_text("dev/*\n")
+    backups_dir = tmp_path / "backups"
+
+    backed_up = excludes.ExcludeList(path).reset(default_source=default_source, backups_dir=backups_dir)
+
+    assert backed_up is None
+    assert not backups_dir.exists()
+
+
+def test_exclude_list_backup_named_becomes_reusable_template(tmp_path):
+    path = tmp_path / "excludes.list"
+    backups_dir = tmp_path / "backups"
+    el = excludes.ExcludeList(path)
+    el.add("dev/*")
+
+    saved = el.backup(backups_dir, "vm-heavy")
+
+    assert saved == backups_dir / "vm-heavy.bak"
+    assert saved.read_text() == "dev/*\n"
+
+
+def test_exclude_list_backup_unnamed_is_timestamped(tmp_path):
+    path = tmp_path / "excludes.list"
+    backups_dir = tmp_path / "backups"
+    el = excludes.ExcludeList(path)
+    el.add("dev/*")
+
+    saved = el.backup(backups_dir)
+
+    assert saved.name.startswith("excludes-")
+    assert saved.name.endswith(".bak")
+
+
+def test_exclude_list_backup_rejects_path_separator_in_name(tmp_path):
+    path = tmp_path / "excludes.list"
+    el = excludes.ExcludeList(path)
+    el.add("dev/*")
+
+    with pytest.raises(excludes.InvalidBackupNameError):
+        el.backup(tmp_path / "backups", "../escape")
+
+
+def test_exclude_list_backup_no_prior_list_is_a_noop(tmp_path):
+    path = tmp_path / "excludes.list"  # never created
+    backups_dir = tmp_path / "backups"
+
+    result = excludes.ExcludeList(path).backup(backups_dir)
+
+    assert result is None
+    assert not backups_dir.exists()
+
+
+def test_exclude_list_restore_from_backup(tmp_path):
+    path = tmp_path / "excludes.list"
+    backup = tmp_path / "vm-heavy.bak"
+    backup.write_text("home/*/VirtualBox VMs/*\n")
+    el = excludes.ExcludeList(path)
+    el.add("dev/*")  # will be overwritten by the restore
+
+    el.restore(backup)
+
+    assert el.load() == ["home/*/VirtualBox VMs/*"]
+
+
+def test_exclude_list_restore_missing_backup_raises(tmp_path):
+    path = tmp_path / "excludes.list"
+    with pytest.raises(FileNotFoundError):
+        excludes.ExcludeList(path).restore(tmp_path / "nope.bak")
+
+
+def test_list_backups_empty_when_dir_absent(tmp_path):
+    assert excludes.list_backups(tmp_path / "nope") == []
+
+
+def test_list_backups_only_bak_files_sorted(tmp_path):
+    backups_dir = tmp_path / "backups"
+    backups_dir.mkdir()
+    (backups_dir / "b.bak").write_text("")
+    (backups_dir / "a.bak").write_text("")
+    (backups_dir / "ignored.txt").write_text("")
+
+    assert [p.name for p in excludes.list_backups(backups_dir)] == ["a.bak", "b.bak"]
+
+
+def test_resolve_backup_by_bare_name_or_with_bak_suffix(tmp_path):
+    backups_dir = tmp_path / "backups"
+    backups_dir.mkdir()
+    target = backups_dir / "vm-heavy.bak"
+    target.write_text("")
+
+    assert excludes.resolve_backup(backups_dir, "vm-heavy") == target
+    assert excludes.resolve_backup(backups_dir, "vm-heavy.bak") == target
+
+
+def test_resolve_backup_missing_raises_with_helpful_message(tmp_path):
+    backups_dir = tmp_path / "backups"
+    with pytest.raises(FileNotFoundError):
+        excludes.resolve_backup(backups_dir, "nope")
+
+
+def test_resolve_backup_rejects_absolute_path_escape(tmp_path):
+    # Path('/a/b') / '/etc/shadow' == Path('/etc/shadow') -- pathlib's '/'
+    # operator discards the left side entirely for an absolute right side,
+    # so an unvalidated name here would let 'excludes backups restore
+    # /etc/shadow' resolve straight to a real file outside backups_dir.
+    backups_dir = tmp_path / "backups"
+    backups_dir.mkdir()
+    escape_target = tmp_path / "outside.txt"
+    escape_target.write_text("not a backup\n")
+
+    with pytest.raises(excludes.InvalidBackupNameError):
+        excludes.resolve_backup(backups_dir, str(escape_target))
+
+
+def test_resolve_backup_rejects_relative_traversal(tmp_path):
+    backups_dir = tmp_path / "nested" / "backups"
+    backups_dir.mkdir(parents=True)
+    (tmp_path / "outside.txt").write_text("not a backup\n")
+
+    with pytest.raises(excludes.InvalidBackupNameError):
+        excludes.resolve_backup(backups_dir, "../outside.txt")
+
+
+def test_exclude_list_backup_unnamed_does_not_overwrite_same_minute_backup(tmp_path):
+    path = tmp_path / "excludes.list"
+    backups_dir = tmp_path / "backups"
+    el = excludes.ExcludeList(path)
+    el.add("dev/*")
+
+    first = el.backup(backups_dir)
+    el._save(["dev/*", "proc/*"])
+    second = el.backup(backups_dir)
+
+    assert first != second
+    assert first.read_text() == "dev/*\n"
+    assert second.read_text() == "dev/*\nproc/*\n"
+
+
+def test_exclude_list_backup_named_overwrites_on_repeat_save(tmp_path):
+    # Unlike the timestamped path above, a named save overwriting itself is
+    # the intended way to update a reusable template, not a collision to
+    # avoid.
+    path = tmp_path / "excludes.list"
+    backups_dir = tmp_path / "backups"
+    el = excludes.ExcludeList(path)
+    el.add("dev/*")
+    el.backup(backups_dir, "vm-heavy")
+
+    el._save(["dev/*", "proc/*"])
+    saved = el.backup(backups_dir, "vm-heavy")
+
+    assert saved == backups_dir / "vm-heavy.bak"
+    assert saved.read_text() == "dev/*\nproc/*\n"
+
+
+def test_exclude_list_backup_rejects_explicit_empty_name():
+    with pytest.raises(excludes.InvalidBackupNameError):
+        excludes.ExcludeList().backup(Path("/unused"), "")
+
+
 def test_resolve_user_dirs_parses_shell_style_file(tmp_path):
     home = tmp_path / "home"
     (home / ".config").mkdir(parents=True)
