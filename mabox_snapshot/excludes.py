@@ -306,7 +306,15 @@ def exclude_unselected_kernel_modules(
     controlled today, never which kernel module trees get excluded from
     the live-'/' scan. Dynamic (depends on this run's kernel selection),
     so unlike the rest of this module it can't be a static excludes.list
-    pattern -- see profiles.py's trim_unselected_kernel_modules."""
+    pattern -- see profiles.py's trim_unselected_kernel_modules.
+
+    Also excludes the unselected kernel's own etc/mkinitcpio.d/*.preset --
+    calamares.py's INITCPIO_CONF_OVERRIDE sets 'kernel: all' so Calamares
+    regenerates every preset it finds on the target after install. Leaving
+    an unselected kernel's preset in place while its module tree above is
+    stripped makes Calamares try and fail to rebuild that initramfs
+    (confirmed against a real --profile lean --kernel install: 'ERROR:
+    module not found: usbhid', mkinitcpio exit code 1, install aborts)."""
     selected_names = {k.name for k in selected_kernels}
     patterns = []
     for kernel in all_kernels:
@@ -316,6 +324,7 @@ def exclude_unselected_kernel_modules(
         if version is None:
             continue  # defensively skip rather than KeyError -- module_version() can fail
         patterns.append(f"usr/lib/modules/{version}/*")
+        patterns.append(str(kernel.preset_path).lstrip("/"))
     return patterns
 
 

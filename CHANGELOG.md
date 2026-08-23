@@ -8,6 +8,10 @@
   now shows `preserving reset` immediately, the same way `config <TAB>` shows its subcommands).
 - Fixed bash-completion: `create`, `version`, `doctor`, `packages list`, `skel audit`, and
   `excludes rules list` now offer their flags on a bare tab press, not just after typing `-`.
+- Fixed `--profile lean` leaving an unselected kernel's `mkinitcpio` preset behind while trimming
+  its module tree -- Calamares regenerates every preset it finds post-install (`kernel: all`), so
+  it tried and failed to rebuild an initramfs with no modules (`ERROR: module not found: 'usbhid'`),
+  aborting the install. The unselected kernel's preset is now excluded too.
 
 ## 0.2.1
 
