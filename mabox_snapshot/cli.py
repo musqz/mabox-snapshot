@@ -547,6 +547,11 @@ def cmd_excludes_list(_args: argparse.Namespace) -> int:
 
 def cmd_excludes_add(args: argparse.Namespace) -> int:
     try:
+        privilege.require_root("mabox-snapshot excludes add")
+    except privilege.NotRootError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    try:
         stored = excludes.ExcludeList().add(args.pattern)
     except excludes.InvalidPatternError as e:
         print(f"error: {e}", file=sys.stderr)
@@ -557,11 +562,21 @@ def cmd_excludes_add(args: argparse.Namespace) -> int:
 
 
 def cmd_excludes_remove(args: argparse.Namespace) -> int:
+    try:
+        privilege.require_root("mabox-snapshot excludes remove")
+    except privilege.NotRootError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
     excludes.ExcludeList().remove(args.pattern)
     return 0
 
 
 def cmd_excludes_reset(_args: argparse.Namespace) -> int:
+    try:
+        privilege.require_root("mabox-snapshot excludes reset")
+    except privilege.NotRootError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
     try:
         excludes.ExcludeList().reset()
     except FileNotFoundError as e:
@@ -571,6 +586,11 @@ def cmd_excludes_reset(_args: argparse.Namespace) -> int:
 
 
 def cmd_excludes_edit(_args: argparse.Namespace) -> int:
+    try:
+        privilege.require_root("mabox-snapshot excludes edit")
+    except privilege.NotRootError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
     return excludes.ExcludeList().edit()
 
 
@@ -606,6 +626,11 @@ def cmd_excludes_rules_list(args: argparse.Namespace) -> int:
 
 def cmd_excludes_rules_add(args: argparse.Namespace) -> int:
     try:
+        privilege.require_root("mabox-snapshot excludes rules add")
+    except privilege.NotRootError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    try:
         stored = excludes.OverrideRuleList().add(args.action, args.pattern)
     except excludes.InvalidPatternError as e:
         print(f"error: {e}", file=sys.stderr)
@@ -616,16 +641,31 @@ def cmd_excludes_rules_add(args: argparse.Namespace) -> int:
 
 
 def cmd_excludes_rules_remove(args: argparse.Namespace) -> int:
+    try:
+        privilege.require_root("mabox-snapshot excludes rules remove")
+    except privilege.NotRootError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
     excludes.OverrideRuleList().remove(args.action, args.pattern)
     return 0
 
 
 def cmd_excludes_rules_clear(_args: argparse.Namespace) -> int:
+    try:
+        privilege.require_root("mabox-snapshot excludes rules clear")
+    except privilege.NotRootError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
     excludes.OverrideRuleList().clear()
     return 0
 
 
 def cmd_excludes_rules_edit(_args: argparse.Namespace) -> int:
+    try:
+        privilege.require_root("mabox-snapshot excludes rules edit")
+    except privilege.NotRootError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
     return excludes.OverrideRuleList().edit()
 
 
@@ -756,20 +796,20 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     excludes_sub = excludes_parser.add_subparsers(dest="excludes_command", required=True)
-    excludes_sub.add_parser("list", help="Print the current exclude list").set_defaults(func=cmd_excludes_list)
-    excludes_sub.add_parser("edit", help="Open the exclude list in $EDITOR").set_defaults(func=cmd_excludes_edit)
-    excludes_sub.add_parser("reset", help="Restore the shipped default exclude list").set_defaults(func=cmd_excludes_reset)
-    excludes_sub.add_parser("folders", help="List named folders and their resolved paths").set_defaults(func=cmd_excludes_folders)
+    excludes_sub.add_parser("list", help="Print the current exclude list, read-only, no root").set_defaults(func=cmd_excludes_list)
+    excludes_sub.add_parser("edit", help="Open the exclude list in $EDITOR (root required)").set_defaults(func=cmd_excludes_edit)
+    excludes_sub.add_parser("reset", help="Restore the shipped default exclude list (root required)").set_defaults(func=cmd_excludes_reset)
+    excludes_sub.add_parser("folders", help="List named folders and their resolved paths, read-only, no root").set_defaults(func=cmd_excludes_folders)
     add_parser = excludes_sub.add_parser(
-        "add", help="Add a pattern",
-        epilog="example:\n  mabox-snapshot excludes add var/cache/*\n",
+        "add", help="Add a pattern (root required)",
+        epilog="example:\n  sudo mabox-snapshot excludes add var/cache/*\n",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     add_parser.add_argument("pattern", help="mksquashfs -ef exclude pattern, relative to /, e.g. var/cache/*")
     add_parser.set_defaults(func=cmd_excludes_add)
     remove_parser = excludes_sub.add_parser(
-        "remove", help="Remove a pattern",
-        epilog="example:\n  mabox-snapshot excludes remove var/cache/*\n",
+        "remove", help="Remove a pattern (root required)",
+        epilog="example:\n  sudo mabox-snapshot excludes remove var/cache/*\n",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     remove_parser.add_argument("pattern", help="Exact pattern to remove, as printed by 'excludes list'")
@@ -785,30 +825,30 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     rules_sub = rules_parser.add_subparsers(dest="rules_command", required=True)
-    rules_list_parser = rules_sub.add_parser("list", help="Print the current override rules")
+    rules_list_parser = rules_sub.add_parser("list", help="Print the current override rules, read-only, no root")
     rules_list_parser.add_argument(
         "--compiled", action="store_true",
         help="Print the flat mksquashfs exclude patterns these rules compile to on this host, instead of the raw rules",
     )
     rules_list_parser.set_defaults(func=cmd_excludes_rules_list)
     rules_add_parser = rules_sub.add_parser(
-        "add", help="Add an override rule",
-        epilog="example:\n  mabox-snapshot excludes rules add include home/*/Documents/keep-this\n",
+        "add", help="Add an override rule (root required)",
+        epilog="example:\n  sudo mabox-snapshot excludes rules add include home/*/Documents/keep-this\n",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     rules_add_parser.add_argument("action", choices=["exclude", "include"])
     rules_add_parser.add_argument("pattern", help="Path relative to /, e.g. home/*/Documents; glob allowed on exclude rules only")
     rules_add_parser.set_defaults(func=cmd_excludes_rules_add)
     rules_remove_parser = rules_sub.add_parser(
-        "remove", help="Remove an override rule",
-        epilog="example:\n  mabox-snapshot excludes rules remove include home/*/Documents/keep-this\n",
+        "remove", help="Remove an override rule (root required)",
+        epilog="example:\n  sudo mabox-snapshot excludes rules remove include home/*/Documents/keep-this\n",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     rules_remove_parser.add_argument("action", choices=["exclude", "include"])
     rules_remove_parser.add_argument("pattern", help="Exact pattern to remove, as printed by 'excludes rules list'")
     rules_remove_parser.set_defaults(func=cmd_excludes_rules_remove)
-    rules_sub.add_parser("clear", help="Remove all override rules").set_defaults(func=cmd_excludes_rules_clear)
-    rules_sub.add_parser("edit", help="Open the override-rules file in $EDITOR").set_defaults(func=cmd_excludes_rules_edit)
+    rules_sub.add_parser("clear", help="Remove all override rules (root required)").set_defaults(func=cmd_excludes_rules_clear)
+    rules_sub.add_parser("edit", help="Open the override-rules file in $EDITOR (root required)").set_defaults(func=cmd_excludes_rules_edit)
 
     packages_parser = sub.add_parser("packages", help="Inspect installed packages")
     packages_sub = packages_parser.add_subparsers(dest="packages_command", required=True)
