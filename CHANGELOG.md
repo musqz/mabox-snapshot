@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added hand-written bash tab-completion (`completions/mabox-snapshot.bash`), installed to
+  `/usr/share/bash-completion/completions/mabox-snapshot`. Covers the full subcommand tree
+  (including `excludes rules`) and value completion for choice flags (`--mode`, `--compression`,
+  `--profile`, `--exclude-folder`, `config set`'s keys). Needs the optional `bash-completion`
+  package to be active.
+
 ## 0.2.0
 
 - `create` now writes a `.sha256` checksum file alongside the built ISO by default; disable with
