@@ -34,7 +34,7 @@ Runtime dependencies (`squashfs-tools`, `grub`, `mkinitcpio`, `libisoburn`, `dos
 
 ```sh
 mabox-snapshot doctor                                             # check prerequisites, read-only, no root needed
-sudo mabox-snapshot create --mode preserving --output-dir /mnt/usb --encrypt
+sudo mabox-snapshot create preserving --output-dir /mnt/usb --encrypt
 ```
 
 ## Usage
@@ -64,7 +64,7 @@ options:
 `create` is the main command:
 
 ```
-usage: mabox-snapshot create [-h] --mode {preserving,reset} [-w WORKDIR] [-o]
+usage: mabox-snapshot create [-h] [-w WORKDIR] [-o]
                               [--output-dir OUTPUT_DIR]
                               [--iso-name ISO_NAME]
                               [--compression {zstd,xz,lz4,lzo,gzip}]
@@ -73,18 +73,19 @@ usage: mabox-snapshot create [-h] --mode {preserving,reset} [-w WORKDIR] [-o]
                               [--exclude-folder {Desktop,Documents,Downloads,Music,Pictures,Videos,Public,Templates}]
                               [--kernel KERNEL] [--all-kernels] [--dry-run]
                               [--change-threshold-mb CHANGE_THRESHOLD_MB]
-                              [--encrypt]
-                              [--profile {full,lean}] [-n]
+                              [--encrypt] [--profile {full,lean}] [-n]
+                              {preserving,reset}
 
 Build a bootable live/install ISO from the running system.
 
-options:
-  -h, --help            show this help message and exit
-  --mode {preserving,reset}
-                        preserving: full personal clone (real /home, real
+positional arguments:
+  {preserving,reset}    preserving: full personal clone (real /home, real
                         accounts, real passwords; optionally --encrypt).
                         reset: sanitized ISO for sharing (synthetic demo/demo
                         account, no real /home, no saved credentials)
+
+options:
+  -h, --help            show this help message and exit
   -w, --workdir WORKDIR
                         Scratch directory for build state -- squashfs layers,
                         ISO tree, mkinitcpio config (default: /var/lib/mabox-
@@ -134,7 +135,7 @@ options:
   -n, --no-checksums    Skip writing a .sha256 checksum file alongside the ISO
 
 example:
-  mabox-snapshot create --mode reset --output-dir /mnt/usb --all-kernels
+  mabox-snapshot create reset --output-dir /mnt/usb --all-kernels
 ```
 
 The other subcommands are smaller, self-explanatory surfaces — run any of them with `-h`:

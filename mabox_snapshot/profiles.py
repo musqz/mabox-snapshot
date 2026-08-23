@@ -1,6 +1,6 @@
-"""Named snapshot size/completeness tiers -- orthogonal to --mode (which
+"""Named snapshot size/completeness tiers -- orthogonal to mode (which
 controls privacy scope: whose data ships, real vs synthetic). --profile
-controls how much of the data --mode says should ship actually does.
+controls how much of the data mode says should ship actually does.
 Exactly two tiers for now (YAGNI) -- trivially extendable later without
 redesign.
 """
