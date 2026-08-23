@@ -115,30 +115,46 @@ List config files in load order.
 Set a key in the user config.
 .SS "excludes {list,edit,add,remove,reset,folders,rules}"
 Manage what a snapshot excludes.
+.I /etc/mabox-snapshot/excludes.list
+and
+.I /etc/mabox-snapshot/overrides.list
+are root-owned, so every subcommand that writes to them needs
+.BR sudo ;
+.B list
+,
+.B folders
+, and
+.B "rules list"
+are read-only and need no root.
 .TP
 .B list
-Print the current exclude list.
+Print the current exclude list. Read-only, no root.
 .TP
 .B edit
-Open the exclude list in $EDITOR.
+Open the exclude list in $EDITOR. Root required.
 .TP
 .B reset
-Restore the shipped default exclude list.
+Restore the shipped default exclude list. Root required.
 .TP
 .B folders
-List named XDG folders and their resolved paths.
+List named XDG folders and their resolved paths. Read-only, no root.
 .TP
 .BI "add " pattern
 Add an mksquashfs -ef exclude pattern, relative to /, e.g. var/cache/*.
+Root required.
 .TP
 .BI "remove " pattern
 Remove a pattern, as printed by
 .BR "excludes list" .
+Root required.
 .TP
 .B "rules {list,add,remove,clear,edit}"
 Ordered include/exclude override rules, for keeping one subpath inside an
 otherwise-excluded directory (e.g. one folder under Documents).
 .RS
+.TP
+.B "rules list"
+Print the current override rules. Read-only, no root.
 .TP
 .BI "rules add " action " " pattern
 .I action
@@ -148,17 +164,18 @@ or
 .BR include ;
 .I pattern
 is a path relative to /, e.g. home/*/Documents (glob allowed on exclude
-rules only).
+rules only). Root required.
 .TP
 .BI "rules remove " action " " pattern
 Remove a rule, as printed by
 .BR "excludes rules list" .
+Root required.
 .TP
 .B "rules clear"
-Remove all override rules.
+Remove all override rules. Root required.
 .TP
 .B "rules edit"
-Open the override-rules file in $EDITOR.
+Open the override-rules file in $EDITOR. Root required.
 .RE
 .SS "packages list [--explicit|--aur|--local|--all]"
 List installed packages, read-only, no root needed. --explicit lists
@@ -216,8 +233,8 @@ otherwise-excluded directory:
 .RS
 .nf
 mabox-snapshot config set output_dir /mnt/backups/mabox-snapshots
-mabox-snapshot excludes rules add exclude 'home/*/Documents/*'
-mabox-snapshot excludes rules add include home/*/Documents/keep-this
+sudo mabox-snapshot excludes rules add exclude 'home/*/Documents/*'
+sudo mabox-snapshot excludes rules add include home/*/Documents/keep-this
 .fi
 .RE
 .SH EXIT STATUS

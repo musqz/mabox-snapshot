@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fixed `excludes add/remove/reset/edit` and `excludes rules add/remove/clear/edit` crashing with a raw
+  `PermissionError` traceback when run without root -- they all write to root-owned files under
+  `/etc/mabox-snapshot/`. Now they print a clean `error: ... requires root -- re-run with sudo.` and exit 1,
+  matching `create`'s existing root check.
+
 ## 0.2.2
 
 - **Breaking:** `create`'s `--mode {preserving,reset}` is now a required positional argument:
