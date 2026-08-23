@@ -30,7 +30,7 @@ makedepends=('python-build' 'python-installer' 'python-hatchling')
 checkdepends=('python-pytest')
 backup=('etc/mabox-snapshot/excludes.list')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('SKIP')
+sha256sums=('ee5604ae5f8ff1353db0f6a01706e4240c05ae5bbfa35681046d02ab21d93d80')
 
 build() {
     cd "$pkgname-$pkgver"
