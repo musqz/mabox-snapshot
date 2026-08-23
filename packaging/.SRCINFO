@@ -25,6 +25,7 @@ pkgbase = mabox-snapshot
 	optdepends = imagemagick: GRUB splash / Calamares branding image normalization
 	optdepends = yay: AUR-reproducibility check for foreign packages
 	optdepends = cryptsetup: --encrypt LUKS2-encrypted preserving-mode ISOs
+	optdepends = bash-completion: tab-completion for the mabox-snapshot CLI
 	backup = etc/mabox-snapshot/excludes.list
 	source = mabox-snapshot-0.2.0.tar.gz::https://github.com/musqz/mabox-snapshot/archive/refs/tags/v0.2.0.tar.gz
 	sha256sums = ee5604ae5f8ff1353db0f6a01706e4240c05ae5bbfa35681046d02ab21d93d80

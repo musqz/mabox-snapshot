@@ -39,7 +39,8 @@ sudo mabox-snapshot create --mode preserving --output-dir /mnt/usb --encrypt
 
 ## Usage
 
-Full command reference: `man mabox-snapshot`, installed with the package.
+Full command reference: `man mabox-snapshot`, installed with the package. Bash tab-completion is
+also installed (needs the optional `bash-completion` package to be active).
 
 ```
 usage: mabox-snapshot [-h]
