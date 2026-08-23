@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.1
+
 - Added hand-written bash tab-completion (`completions/mabox-snapshot.bash`), installed to
   `/usr/share/bash-completion/completions/mabox-snapshot`. Covers the full subcommand tree
   (including `excludes rules`) and value completion for choice flags (`--mode`, `--compression`,
