@@ -72,8 +72,18 @@ _miso_persist_find_device() {
     disk_dev=$(readlink -f "${misodevice}" 2>/dev/null)
     [[ -b "${disk_dev}" ]] || return 1
     disk="${disk_dev##*/}"
+    # misodevice can resolve to either the whole disk or one of its own
+    # partitions -- miso_luks's _find_dev_by_path() matches whichever
+    # /proc/partitions entry has /.miso at its root first, and an isohybrid
+    # image's ISO9660 signature is readable both ways, so either can win.
+    # /sys/block/<name> only exists for whole disks; when misodevice was a
+    # partition, resolve its parent via the /sys/class/block symlink
+    # instead (.../block/<disk>/<partition> -> parent dir is <disk>).
+    if [[ ! -d "/sys/block/${disk}" ]]; then
+        disk=$(basename "$(readlink -f "/sys/class/block/${disk}/..")" 2>/dev/null)
+    fi
     sysdir="/sys/block/${disk}"
-    [[ -d "${sysdir}" ]] || return 1
+    [[ -n "${disk}" && -d "${sysdir}" ]] || return 1
 
     for part in "${sysdir}/${disk}"*; do
         [[ -d "${part}" ]] || continue

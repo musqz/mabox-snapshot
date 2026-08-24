@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Fixed `miso_persist` resolving the wrong partition on real hardware: `_miso_persist_find_device()`
+  assumed `${misodevice}` was always the whole boot disk, but `miso_luks`'s `_find_dev_by_path()` can
+  resolve it to either the whole disk or one of its own partitions (an isohybrid image's ISO9660
+  signature is readable both ways). When it was a partition, `/sys/block/<name>` never existed (kernel
+  partitions live under `/sys/block/<parent>/<partition>`, never as their own top-level entry), so the
+  scan silently landed on the wrong device -- e.g. attempting to mount the read-only `MABOX_LIVE` boot
+  partition itself as `MABOX_PERSIST` and failing with `Can't open blockdev`. Now falls back to
+  resolving the parent disk via the partition's `/sys/class/block` symlink.
+
 ## 0.2.4
 
 - Added the `miso_persist` initramfs hook: every ISO now boots with support for an optional
