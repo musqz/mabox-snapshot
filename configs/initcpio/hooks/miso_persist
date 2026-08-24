@@ -125,7 +125,27 @@ _miso_persist_apply_overlay() {
     fi
 
     mkdir -p "${persist_mnt}"
-    if ! mount -t ext4 -o rw "${persist_dev}" "${persist_mnt}"; then
+    # blkid succeeding inside _miso_persist_find_device above only proves
+    # the device was readable at that moment -- it doesn't prove the
+    # kernel/udev settling a freshly-appeared partition needs is actually
+    # done, and the new mount(2) API's fsconfig() can still fail to open
+    # the blockdev right after udevadm settle already returned (observed on
+    # real hardware: found by label, then "Can't open blockdev" on the very
+    # next line). Same class of race mabox-persistence-usb hit and fixed on
+    # the write side -- a single attempt right after settle isn't reliable.
+    # Retry a few times before falling back; this path already degrades
+    # gracefully either way, so the extra attempts only cost a few seconds
+    # in the case that was already going to lose persistence.
+    local persist_mount_ok=0 persist_mount_attempt
+    for persist_mount_attempt in 1 2 3 4 5; do
+        if mount -t ext4 -o rw "${persist_dev}" "${persist_mnt}"; then
+            persist_mount_ok=1
+            break
+        fi
+        udevadm settle --timeout=2 2>/dev/null
+        sleep 1
+    done
+    if [[ "${persist_mount_ok}" -ne 1 ]]; then
         _miso_persist_warn "Found ${_MISO_PERSIST_LABEL} but failed to mount it -- continuing without persistence."
         return 0
     fi
