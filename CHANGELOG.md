@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.5
 
 - Fixed `miso_persist` resolving the wrong partition on real hardware: `_miso_persist_find_device()`
   assumed `${misodevice}` was always the whole boot disk, but `miso_luks`'s `_find_dev_by_path()` can
