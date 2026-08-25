@@ -1,3 +1,13 @@
+# mabox-snapshot addition: a vendored copy of the external
+# manjaro-tools-iso-git "miso" hook (used for every non---encrypt build),
+# carrying only the fixed _find_dev_by_path() below -- everything else is
+# unmodified stock "miso" logic. mkinitcpio resolves /etc/initcpio/hooks/
+# before /usr/lib/initcpio/hooks/, so a fix to the external package's own
+# "miso" hook can't be vendored under that same name; see
+# MKINITCPIO_MISO_HOOKS in mabox_snapshot/constants.py. Keep
+# _find_dev_by_path() here in sync by hand with the copy in miso_luks (the
+# --encrypt equivalent of this hook).
+
 # args: source, newroot, mountpoint
 _mnt_dmsnapshot() {
     local img="${1}"
@@ -71,43 +81,6 @@ _mnt_sfs() {
     _mnt_dev "${sfs_dev}" "${mnt}" "-r" "defaults"
 }
 
-# mabox-snapshot addition: unlocks a LUKS2 container produced by
-# mabox_snapshot.luks.encrypt_squashfs() and mounts the decrypted rootfs
-# squashfs it contains -- the plaintext version of this same layer would
-# otherwise be handled by _mnt_sfs() above. Only ever used for the
-# "rootfs" layer of a --encrypt preserving-mode build (see the branch in
-# miso_mount_handler() below); mabox-snapshot never produces an encrypted
-# livefs/mhwdfs/desktopfs layer.
-# args: /path/to/luks_container_file, mountpoint
-_mnt_luks_sfs() {
-    local img="${1}"
-    local mnt="${2}"
-    local mapper_name="mabox_rootfs"
-    local luks_dev
-
-    luks_dev=$(losetup --find --show --read-only "${img}")
-    echo ${luks_dev} >> /run/miso/used_block_devices
-
-    if command -v plymouth >/dev/null 2>&1 && plymouth --ping 2>/dev/null; then
-        plymouth ask-for-password --prompt="A passphrase is required to unlock the Mabox root filesystem" \
-            --command="cryptsetup open --type luks2 --key-file=- ${luks_dev} ${mapper_name}"
-    else
-        echo ""
-        echo "A passphrase is required to unlock the Mabox root filesystem:"
-        while ! cryptsetup open --type luks2 "${luks_dev}" "${mapper_name}"; do
-            sleep 2
-        done
-    fi
-
-    if [[ ! -e "/dev/mapper/${mapper_name}" ]]; then
-        echo "ERROR: failed to unlock ${img}"
-        launch_interactive_shell
-    fi
-
-    echo $(readlink -f /dev/mapper/${mapper_name}) >> /run/miso/used_block_devices
-    _mnt_dev "/dev/mapper/${mapper_name}" "${mnt}" "-r" "defaults"
-}
-
 # args: device, mountpoint, flags, opts
 _mnt_dev() {
     local dev="${1}"
@@ -177,8 +150,6 @@ _find_dev_by_path () {
         # (e.g. a MABOX_PERSIST overlay) from being opened read-write. The
         # whole-disk pass stays as a fallback for media built without a
         # partition entry for the ISO content.
-        #
-        # Keep this in sync by hand with the copy in hooks/miso_boot.
         for pass in part disk; do
             for d in $(awk '{ print "/dev/"$4 }' /proc/partitions); do
                 if [[ "${pass}" == "part" ]]; then
@@ -321,16 +292,7 @@ miso_mount_handler() {
     local lower_dir
 
     for sfs in livefs mhwdfs desktopfs rootfs; do
-        # mabox-snapshot addition: a --encrypt preserving-mode build ships
-        # rootfs.sfs.luks instead of a plaintext rootfs.sfs. Unlock it via
-        # _mnt_luks_sfs() (prompts for a passphrase) instead of the plain
-        # loop-mount _mnt_sfs() uses -- everything else in this loop
-        # (livefs/mhwdfs/desktopfs, and rootfs on any non-encrypted build)
-        # is unchanged from stock miso.
-        if [[ "${sfs}" == "rootfs" && -f "${src}/rootfs.sfs.luks" ]]; then
-            _mnt_luks_sfs "${src}/rootfs.sfs.luks" "${dest_sfs}/${sfs}"
-            lower_dir=${lower_dir:-}${lower_dir:+:}"${dest_sfs}/${sfs}"
-        elif [[ -f "${src}/${sfs}.sfs" ]]; then
+        if [[ -f "${src}/${sfs}.sfs" ]]; then
             _mnt_sfs "${src}/${sfs}.sfs" "${dest_sfs}/${sfs}"
             if [[ -f "${dest_sfs}/${sfs}/${sfs}.img" ]]; then
                 mkdir -p ${dest_img}

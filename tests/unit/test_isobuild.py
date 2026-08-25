@@ -42,6 +42,20 @@ def test_build_xorriso_command_references_boot_files():
     assert cmd[cmd.index("-o") + 1] == "/out/mabox.iso"
 
 
+def test_build_xorriso_command_gives_the_iso_content_its_own_real_partition():
+    # Load-bearing for the live-boot device-resolution fix: -partition_offset
+    # is what makes the ISO9660 content mountable from a real MBR partition
+    # (in addition to the whole-disk view), which is what lets
+    # miso_boot's/miso_luks's fixed _find_dev_by_path() resolve to a
+    # partition instead of the whole disk at boot. -iso_mbr_part_type sets
+    # that partition's type byte to 0x00 so other OSes don't try to
+    # auto-mount/reformat it as a real filesystem.
+    cmd = isobuild.build_xorriso_command(Path("/iso"), Path("/out/mabox.iso"), "MYVOLID")
+
+    assert cmd[cmd.index("-partition_offset") + 1] == "16"
+    assert cmd[cmd.index("-iso_mbr_part_type") + 1] == "0x00"
+
+
 def test_check_miso_hooks_installed_raises_when_missing(tmp_path):
     with pytest.raises(FileNotFoundError, match="manjaro-tools-iso-git"):
         isobuild.check_miso_hooks_installed(["miso"], [tmp_path])
@@ -97,6 +111,18 @@ def test_check_miso_persist_hook_installed_passes_when_present(tmp_path):
     hook_path.write_text("# hook")
 
     isobuild.check_miso_persist_hook_installed(hook_path)  # must not raise
+
+
+def test_check_miso_boot_hook_installed_raises_when_missing(tmp_path):
+    with pytest.raises(FileNotFoundError, match="boot hook"):
+        isobuild.check_miso_boot_hook_installed(tmp_path / "miso_boot")
+
+
+def test_check_miso_boot_hook_installed_passes_when_present(tmp_path):
+    hook_path = tmp_path / "miso_boot"
+    hook_path.write_text("# hook")
+
+    isobuild.check_miso_boot_hook_installed(hook_path)  # must not raise
 
 
 def test_write_checksum_matches_sha256sum_format(tmp_path):

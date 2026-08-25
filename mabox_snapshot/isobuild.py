@@ -69,6 +69,13 @@ def check_miso_persist_hook_installed(hook_path: Path = constants.MISO_PERSIST_H
         )
 
 
+def check_miso_boot_hook_installed(hook_path: Path = constants.MISO_BOOT_HOOK_INSTALLED) -> None:
+    if not hook_path.exists():
+        raise FileNotFoundError(
+            f"boot hook not found at {hook_path} -- is mabox-snapshot installed via its package?"
+        )
+
+
 def build_initramfs(kver: str, conf_path: Path, dest: Path) -> None:
     subprocess.run(build_mkinitcpio_command(kver, conf_path, dest), check=True)
 

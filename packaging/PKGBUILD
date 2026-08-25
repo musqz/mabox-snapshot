@@ -67,6 +67,11 @@ package() {
     install -Dm644 configs/initcpio/install/miso_luks \
         "$pkgdir/usr/lib/initcpio/install/miso_luks"
 
+    install -Dm644 configs/initcpio/hooks/miso_boot \
+        "$pkgdir/usr/lib/initcpio/hooks/miso_boot"
+    install -Dm644 configs/initcpio/install/miso_boot \
+        "$pkgdir/usr/lib/initcpio/install/miso_boot"
+
     install -Dm644 configs/initcpio/hooks/miso_persist \
         "$pkgdir/usr/lib/initcpio/hooks/miso_persist"
     install -Dm644 configs/initcpio/install/miso_persist \
