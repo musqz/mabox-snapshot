@@ -325,7 +325,11 @@ def cmd_create(args: argparse.Namespace) -> int:
         isobuild.check_miso_hooks_installed()
         isobuild.check_miso_hook_binaries_installed()
         isobuild.check_miso_persist_hook_installed()
-        isobuild.check_miso_boot_hook_installed()
+        if not cfg.encrypt:
+            # miso_boot is only wired into MKINITCPIO_MISO_HOOKS -- an
+            # --encrypt build uses miso_luks instead (see luks.check_hook_installed()
+            # below), which never references miso_boot at all.
+            isobuild.check_miso_boot_hook_installed()
     except FileNotFoundError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
