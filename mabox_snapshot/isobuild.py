@@ -178,7 +178,18 @@ def build_xorriso_command(iso_root: Path, dest: Path, volid: str) -> list[str]:
         "--sort-weight", "0", "/",
         "--sort-weight", "1", "/boot",
         "--grub2-mbr", str(iso_root / "boot" / "grub" / "i386-pc" / "boot_hybrid.img"),
-        "-iso_mbr_part_type", "0x00",
+        # 0x17 ("Windows hidden IFS"), not 0x00: matches syslinux isohybrid's
+        # own long-standing default for exactly this slot. 0x00 looks
+        # appealingly inert but is the literal MBR "unused slot" marker --
+        # libparted (and the kernel's own msdos.c) treat a 0x00 entry as
+        # empty regardless of its start/size, so mabox-persistence-usb's
+        # `parted mkpart` (which auto-picks the lowest free slot) silently
+        # reused and overwrote this exact entry when appending
+        # MABOX_PERSIST, destroying the only partition-table pointer to the
+        # ISO's own content. 0x17 is non-zero (so parted/fdisk correctly see
+        # this slot as occupied and skip it) while still being a type
+        # Windows won't offer to auto-mount or format.
+        "-iso_mbr_part_type", "0x17",
         "-partition_offset", "16",
         "-b", "boot/grub/i386-pc/eltorito.img",
         "-c", "boot.catalog",

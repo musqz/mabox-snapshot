@@ -47,13 +47,15 @@ def test_build_xorriso_command_gives_the_iso_content_its_own_real_partition():
     # is what makes the ISO9660 content mountable from a real MBR partition
     # (in addition to the whole-disk view), which is what lets
     # miso_boot's/miso_luks's fixed _find_dev_by_path() resolve to a
-    # partition instead of the whole disk at boot. -iso_mbr_part_type sets
-    # that partition's type byte to 0x00 so other OSes don't try to
-    # auto-mount/reformat it as a real filesystem.
+    # partition instead of the whole disk at boot. -iso_mbr_part_type must
+    # be non-zero (0x17, matching syslinux isohybrid's own default) -- 0x00
+    # is the literal MBR "unused slot" marker, so parted's mkpart (used by
+    # mabox-persistence-usb to append MABOX_PERSIST) would treat this slot
+    # as free and silently overwrite it instead of skipping past it.
     cmd = isobuild.build_xorriso_command(Path("/iso"), Path("/out/mabox.iso"), "MYVOLID")
 
     assert cmd[cmd.index("-partition_offset") + 1] == "16"
-    assert cmd[cmd.index("-iso_mbr_part_type") + 1] == "0x00"
+    assert cmd[cmd.index("-iso_mbr_part_type") + 1] == "0x17"
 
 
 def test_check_miso_hooks_installed_raises_when_missing(tmp_path):
