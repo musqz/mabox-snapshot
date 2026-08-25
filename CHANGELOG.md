@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.7
+
+- Cleanup pass ahead of external review: removed dead code with zero
+  remaining references (`squashfs.available_compressors()`,
+  `SnapshotConfig.demo_lang`, `constants.SUPPORTED_DEMO_LANGS`/
+  `DEFAULT_DEMO_LANG`, `constants.CALAMARES_CONFIG_DIR`), and fixed docs
+  that still described persistence as unverified/not-yet-implemented after
+  0.2.6 shipped it confirmed working on real hardware (`miso_persist`'s
+  header comment, the persistent-usb design spec, and `SOURCES.md`, which
+  was missing attribution for the `miso_boot` hook vendored in 0.2.6). No
+  behavior changes.
+
 ## 0.2.6
 
 - Fixed `MABOX_PERSIST` never mounting at boot on real hardware:
