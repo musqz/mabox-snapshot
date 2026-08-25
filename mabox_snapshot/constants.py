@@ -41,7 +41,6 @@ HISTORY_DIR = Path("/var/lib/mabox-snapshot/history")
 # configs/ during development.
 SHARE_DIR = Path("/usr/share/mabox-snapshot")
 MABOX_SKEL_DIR = SHARE_DIR / "mabox-skel" / "skel"
-CALAMARES_CONFIG_DIR = SHARE_DIR / "calamares"
 
 # pacman/system files copied verbatim into every snapshot (both modes -- no
 # personal data in either).
@@ -105,9 +104,6 @@ DEMO_BASELINE_GROUPS = ["wheel", "audio", "video", "storage", "optical", "networ
 
 REQUIRED_TOOLS = ["mksquashfs", "xorriso", "grub-mkimage", "mkinitcpio", "mkfs.fat", "rsync", "openssl"]
 OPTIONAL_TOOLS = ["calamares", "yay", "magick", "cryptsetup"]
-
-SUPPORTED_DEMO_LANGS = ["en", "es", "pl"]
-DEFAULT_DEMO_LANG = "en"
 
 # ISO boot layout, modeled on Manjaro's own miso hook (verified on this host
 # at /etc/initcpio/hooks/miso -- misobasedir defaults to "manjaro" there if
