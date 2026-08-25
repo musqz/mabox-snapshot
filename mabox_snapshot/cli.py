@@ -6,6 +6,7 @@ import argparse
 import os
 import shutil
 import sys
+import textwrap
 from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
@@ -85,6 +86,77 @@ def _apply_create_overrides(cfg: config.SnapshotConfig, args: argparse.Namespace
     if args.no_checksums:
         overrides["checksums"] = False
     return replace(cfg, **overrides)
+
+
+def _print_explain(
+    args: argparse.Namespace,
+    cfg: config.SnapshotConfig,
+    plan: overlay.BuildPlan,
+    profile: profiles.Profile,
+    selected: list,
+    kvers: dict,
+    dest: Path,
+    has_splash: bool,
+    branding,
+) -> None:
+    """Plain-language counterpart to the raw-command dry-run block below --
+    what the build does, not the exact mksquashfs/xorriso/grub-mkimage
+    invocations that do it."""
+    steps = []
+    for layer in plan.layers:
+        if layer.name == "rootfs":
+            if args.mode == "preserving":
+                desc = "your live system's root filesystem (real /home, real accounts and passwords included)"
+            else:
+                desc = "your live system's root filesystem (with /home and account files stripped out)"
+        else:
+            desc = "a small sanitized overlay (a synthetic demo/demo account, seeded desktop config, no real credentials or machine ID)"
+        steps.append(f"Read {desc}, and pack it into a compressed {layer.name}.sfs image ({cfg.compression}).")
+    if len(plan.layers) > 1:
+        steps.append("These layers are never combined at build time -- they merge back into one system at boot.")
+
+    total_excludes = sum(len(layer.exclude_patterns) for layer in plan.layers)
+    steps.append(f"Skip {total_excludes} exclude pattern(s) along the way (caches, logs, temp files, and anything on your exclude list).")
+
+    if cfg.encrypt:
+        steps.append(
+            "Encrypt rootfs.sfs with LUKS2 -- you'll be asked for a passphrase before the build "
+            "starts. A Calamares job on the live system briefly remounts the unlocked source to "
+            "read it, then locks it again."
+        )
+
+    kernel_list = ", ".join(f"{k.name} ({kvers[k.name]})" for k in selected)
+    plural = "s" if len(selected) > 1 else ""
+    steps.append(f"Build a fresh initramfs for kernel{plural} {kernel_list}, so the ISO can boot and find its own rootfs.sfs.")
+
+    if has_splash:
+        steps.append("Resize the boot splash image for the GRUB menu.")
+    else:
+        steps.append("No custom splash image configured -- the ISO boots with GRUB's plain menu.")
+
+    if args.mode == "reset" and branding:
+        steps.append(f"Apply custom Calamares branding ({len(branding.slides)} slide(s)).")
+
+    steps.append("Write BIOS and EFI boot images, so the ISO starts on both old and new-style firmware.")
+    steps.append("Assemble everything into one bootable ISO file.")
+
+    print("This build will:")
+    print()
+    for i, step in enumerate(steps, start=1):
+        print(textwrap.fill(step, width=76, initial_indent=f"  {i}. ", subsequent_indent="     "))
+    print()
+    print(f"  mode:        {plan.mode}")
+    print(f"  profile:     {profile.name}")
+    for layer in plan.layers:
+        print(f"  source:      [{layer.name}] {layer.source} ({len(layer.exclude_patterns)} exclude pattern(s))")
+    print(f"  kernels:     {kernel_list}")
+    print(f"  compression: {cfg.compression}")
+    print(f"  encryption:  {'LUKS2 (passphrase prompted at build time)' if cfg.encrypt else 'none'}")
+    print(f"  workdir:     {cfg.workdir}")
+    print(f"  output:      {dest}")
+    print()
+    print("Nothing has been built yet -- this is a preview only.")
+    print("Run --dry-run instead to see the exact commands, or drop both flags to build for real.")
 
 
 def cmd_create(args: argparse.Namespace) -> int:
@@ -282,37 +354,40 @@ def cmd_create(args: argparse.Namespace) -> int:
     )
     xorriso_cmd = isobuild.build_xorriso_command(iso_root, dest, constants.ISO_VOLID)
 
-    print(f"mode:        {plan.mode}")
-    print(f"profile:     {profile.name}")
-    for layer in plan.layers:
-        print(f"source:      [{layer.name}] {layer.source} ({len(layer.exclude_patterns)} exclude pattern(s))")
-    print(f"kernels:     {', '.join(f'{k.name} ({kvers[k.name]})' for k in selected)}")
-    level = f" (level {cfg.compression_level})" if cfg.compression_level is not None else ""
-    print(f"compression: {cfg.compression}{level}")
-    print(f"workdir:     {cfg.workdir}")
-    print(f"output:      {dest}")
-    for layer in plan.layers:
-        print(f"squashfs:    [{layer.name}] {' '.join(str(c) for c in layer_cmds[layer.name])}")
-    print(f"encryption:  {'LUKS2 (rootfs.sfs.luks, passphrase prompted at build time)' if cfg.encrypt else 'none'}")
-    for cmd in initramfs_cmds:
-        print(f"initramfs:   {' '.join(str(c) for c in cmd)}")
-    if has_splash:
-        splash_cmd = grubcfg.build_splash_command(splash_source, splash_dest)
-        print(f"splash:      {' '.join(str(c) for c in splash_cmd)}")
+    if args.explain:
+        _print_explain(args, cfg, plan, profile, selected, kvers, dest, has_splash, branding)
     else:
-        print(f"splash:      none configured ({splash_source} not found) -- plain grub boot menu")
-    if args.mode == "reset":
-        note = f"{len(branding.slides)} slide(s) from {constants.IMAGES_DIR}" if branding else "none configured -- stock Manjaro branding"
-        print(f"calamares:   {note}")
-    if cfg.encrypt:
-        print(f"unpackfs:    {', '.join(layer.name for layer in plan.layers)} -> {unpackfs_conf_path} (rootfs sourced from live decrypted mount, remounted by an injected Calamares job right before unpackfs runs and closed again right after)")
-    else:
-        print(f"unpackfs:    {', '.join(layer.name for layer in plan.layers)} -> {unpackfs_conf_path}")
-    print(f"bios boot:   {' '.join(str(c) for c in bios_cmd)}")
-    print(f"efi boot:    {' '.join(str(c) for c in efi_cmd)}")
-    print(f"assemble:    {' '.join(str(c) for c in xorriso_cmd)}")
+        print(f"mode:        {plan.mode}")
+        print(f"profile:     {profile.name}")
+        for layer in plan.layers:
+            print(f"source:      [{layer.name}] {layer.source} ({len(layer.exclude_patterns)} exclude pattern(s))")
+        print(f"kernels:     {', '.join(f'{k.name} ({kvers[k.name]})' for k in selected)}")
+        level = f" (level {cfg.compression_level})" if cfg.compression_level is not None else ""
+        print(f"compression: {cfg.compression}{level}")
+        print(f"workdir:     {cfg.workdir}")
+        print(f"output:      {dest}")
+        for layer in plan.layers:
+            print(f"squashfs:    [{layer.name}] {' '.join(str(c) for c in layer_cmds[layer.name])}")
+        print(f"encryption:  {'LUKS2 (rootfs.sfs.luks, passphrase prompted at build time)' if cfg.encrypt else 'none'}")
+        for cmd in initramfs_cmds:
+            print(f"initramfs:   {' '.join(str(c) for c in cmd)}")
+        if has_splash:
+            splash_cmd = grubcfg.build_splash_command(splash_source, splash_dest)
+            print(f"splash:      {' '.join(str(c) for c in splash_cmd)}")
+        else:
+            print(f"splash:      none configured ({splash_source} not found) -- plain grub boot menu")
+        if args.mode == "reset":
+            note = f"{len(branding.slides)} slide(s) from {constants.IMAGES_DIR}" if branding else "none configured -- stock Manjaro branding"
+            print(f"calamares:   {note}")
+        if cfg.encrypt:
+            print(f"unpackfs:    {', '.join(layer.name for layer in plan.layers)} -> {unpackfs_conf_path} (rootfs sourced from live decrypted mount, remounted by an injected Calamares job right before unpackfs runs and closed again right after)")
+        else:
+            print(f"unpackfs:    {', '.join(layer.name for layer in plan.layers)} -> {unpackfs_conf_path}")
+        print(f"bios boot:   {' '.join(str(c) for c in bios_cmd)}")
+        print(f"efi boot:    {' '.join(str(c) for c in efi_cmd)}")
+        print(f"assemble:    {' '.join(str(c) for c in xorriso_cmd)}")
 
-    if args.dry_run:
+    if args.dry_run or args.explain:
         return 0
 
     try:
@@ -817,6 +892,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Include every installed kernel instead of just the newest",
     )
     create_parser.add_argument("--dry-run", action="store_true", help="Print the resolved plan and command, execute nothing")
+    create_parser.add_argument(
+        "--explain", action="store_true",
+        help="Print a plain-language walkthrough of what the build will do instead of the raw commands, execute nothing",
+    )
     create_parser.add_argument("--change-threshold-mb", type=int, help="Prompt about home-dir items new/grown by at least this many MiB since the last snapshot (default 200)")
     create_parser.add_argument("--encrypt", action="store_true", help="Encrypt rootfs.sfs with LUKS2 (preserving mode only; passphrase prompted interactively at build time)")
     create_parser.add_argument(

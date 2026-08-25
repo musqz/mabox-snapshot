@@ -72,6 +72,7 @@ usage: mabox-snapshot create [-h] [-w WORKDIR] [-o]
                               [--exclude-list EXCLUDE_LIST]
                               [--exclude-folder {Desktop,Documents,Downloads,Music,Pictures,Videos,Public,Templates}]
                               [--kernel KERNEL] [--all-kernels] [--dry-run]
+                              [--explain]
                               [--change-threshold-mb CHANGE_THRESHOLD_MB]
                               [--encrypt] [--profile {full,lean}] [-n]
                               {preserving,reset}
@@ -122,6 +123,8 @@ options:
   --all-kernels         Include every installed kernel instead of just the
                         newest
   --dry-run             Print the resolved plan and command, execute nothing
+  --explain             Print a plain-language walkthrough of what the build
+                        will do instead of the raw commands, execute nothing
   --change-threshold-mb CHANGE_THRESHOLD_MB
                         Prompt about home-dir items new/grown by at least this
                         many MiB since the last snapshot (default 200)

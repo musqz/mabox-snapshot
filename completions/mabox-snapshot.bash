@@ -41,7 +41,7 @@ _mabox_snapshot_create() {
     COMPREPLY=($(compgen -W "
         -w --workdir -o --skip-space-check --output-dir --iso-name
         --compression --compression-level --exclude-list --exclude-folder
-        --kernel --all-kernels --dry-run --change-threshold-mb --encrypt
+        --kernel --all-kernels --dry-run --explain --change-threshold-mb --encrypt
         --profile -n --no-checksums -h --help
     " -- "$cur"))
 }
