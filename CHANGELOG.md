@@ -20,8 +20,24 @@
   external hook's own name -- `--encrypt` builds get the same fix directly
   in the existing `miso_luks` hook. `PERSIST_HOOK_VERSION` bumped to 2 (see
   `constants.py`) since a v1-marked ISO's persistence never actually worked
-  at boot. Still unverified on real hardware/QEMU as of this entry -- see
-  `docs/superpowers/specs/2026-08-20-persistent-usb-design.md`.
+  at boot.
+- Fixed a second, previously-hidden bug found while real-hardware-testing
+  the fix above: the ISO content's own MBR partition entry used type `0x00`,
+  which `parted` (and the kernel's own msdos partition-table code) treats as
+  an unused/free slot regardless of its start/size. `mabox-persistence-usb`'s
+  `parted mkpart` (which auto-picks the lowest free slot when appending
+  `MABOX_PERSIST`) was therefore silently reusing and overwriting that exact
+  slot -- confirmed on real hardware via `blkid`, which showed the appended
+  partition landing as slot 1 labeled `MABOX_PERSIST` instead of slot 3,
+  with the ISO content's own partition entry gone. This has been broken
+  since `mabox-persistence-usb`'s partition-appending code was first
+  written; the old, always-whole-disk `_find_dev_by_path()` never depended
+  on that entry existing, so nothing surfaced it until this session's fix
+  made boot depend on it for the first time. Changed
+  `-iso_mbr_part_type` to `0x17` ("Windows hidden IFS"), matching syslinux
+  isohybrid's own long-standing default for this exact scenario: non-zero,
+  so partition tools correctly see the slot as occupied, while still hidden
+  from Windows auto-mount/format prompts.
 
 ## 0.2.5
 
