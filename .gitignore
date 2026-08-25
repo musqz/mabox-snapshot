@@ -24,3 +24,4 @@ packaging/pkg/
 packaging/mabox-snapshot/
 packaging/*.pkg.tar.zst
 packaging/*.pkg.tar.xz
+packaging/*.tar.gz

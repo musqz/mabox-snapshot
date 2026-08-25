@@ -325,6 +325,7 @@ def cmd_create(args: argparse.Namespace) -> int:
         isobuild.check_miso_hooks_installed()
         isobuild.check_miso_hook_binaries_installed()
         isobuild.check_miso_persist_hook_installed()
+        isobuild.check_miso_boot_hook_installed()
     except FileNotFoundError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1

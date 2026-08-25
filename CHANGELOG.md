@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.2.6
+
+- Fixed `MABOX_PERSIST` never mounting at boot on real hardware:
+  `_find_dev_by_path()` (used to locate the live media at boot) iterates
+  `/proc/partitions` in raw kernel order and returns the first device where
+  `/.miso` is found. An isohybrid image's ISO9660 content is mountable both
+  from its own real MBR partition (`-partition_offset` in `isobuild.py`) and
+  from the whole-disk view, and the whole disk always enumerates first --
+  so it always won, and mounting it took an exclusive kernel claim on the
+  entire disk that permanently blocked any other partition of the same
+  device (including `MABOX_PERSIST`) from being opened read-write. Fixed by
+  making `_find_dev_by_path()` scan partitions before falling back to whole
+  disks. This required a new vendored `miso_boot` hook (a copy of the
+  external `manjaro-tools-iso-git` package's own `miso` hook, carrying only
+  this fix) for default, non-`--encrypt` builds, since mkinitcpio resolves
+  `/etc/initcpio/hooks/` before this package's own
+  `/usr/lib/initcpio/hooks/`, so the fix couldn't be vendored under the
+  external hook's own name -- `--encrypt` builds get the same fix directly
+  in the existing `miso_luks` hook. `PERSIST_HOOK_VERSION` bumped to 2 (see
+  `constants.py`) since a v1-marked ISO's persistence never actually worked
+  at boot. Still unverified on real hardware/QEMU as of this entry -- see
+  `docs/superpowers/specs/2026-08-20-persistent-usb-design.md`.
+
 ## 0.2.5
 
 - Fixed `miso_persist` resolving the wrong partition on real hardware: `_miso_persist_find_device()`

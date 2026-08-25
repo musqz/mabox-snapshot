@@ -130,16 +130,23 @@ GRUB_UNICODE_FONT = Path("/usr/share/grub/unicode.pf2")
 
 # Verified at /usr/share/manjaro-tools/mkinitcpio.conf (manjaro-tools-iso-git
 # package) -- the exact HOOKS/MODULES a live ISO's initramfs needs for the
-# miso boot hook to run. miso_persist MUST stay listed after
-# miso_loop_mnt/miso_pxe_* -- each of those conditionally overwrites
-# mount_handler for its own alt-boot-source (img_loop=, PXE net params);
-# miso_persist chains onto whatever mount_handler is set at the time its
-# own run_hook() runs, so loading before them would have its wrapping
-# silently discarded whenever one of those paths triggers. See
+# miso boot hook to run, except "miso" itself is replaced with "miso_boot"
+# (see configs/initcpio/{hooks,install}/miso_boot): a vendored copy of the
+# external package's own hook, carrying only a fix to _find_dev_by_path()'s
+# boot-device resolution (prefers a real partition over the whole disk --
+# see that file's header comment for why). mkinitcpio resolves
+# /etc/initcpio/{hooks,install}/ before /usr/lib/initcpio/{hooks,install}/,
+# so the fix can't be vendored under the external hook's own name; needs a
+# distinct one instead, exactly like miso_luks below. miso_persist MUST stay
+# listed after miso_loop_mnt/miso_pxe_* -- each of those conditionally
+# overwrites mount_handler for its own alt-boot-source (img_loop=, PXE net
+# params); miso_persist chains onto whatever mount_handler is set at the
+# time its own run_hook() runs, so loading before them would have its
+# wrapping silently discarded whenever one of those paths triggers. See
 # configs/initcpio/hooks/miso_persist's header comment for the full story.
 MKINITCPIO_MISO_MODULES = ["loop", "dm-snapshot"]
 MKINITCPIO_MISO_HOOKS = [
-    "base", "udev", "miso_shutdown", "miso", "miso_loop_mnt",
+    "base", "udev", "miso_shutdown", "miso_boot", "miso_loop_mnt",
     "miso_pxe_common", "miso_pxe_http", "miso_pxe_nbd", "miso_pxe_nfs",
     "miso_persist", "miso_kms", "modconf", "block", "filesystems", "keyboard", "keymap",
 ]
@@ -150,7 +157,9 @@ MKINITCPIO_MISO_HOOKS = [
 # the already-working unencrypted boot chain. See mabox_snapshot/luks.py
 # and configs/initcpio/{hooks,install}/miso_luks (a modified copy of the
 # stock miso hook, not a hook layered before it -- the decrypt step has to
-# happen inside miso_mount_handler()'s per-layer loop).
+# happen inside miso_mount_handler()'s per-layer loop). Carries the same
+# _find_dev_by_path() boot-device-resolution fix as miso_boot above -- keep
+# the two in sync by hand.
 MKINITCPIO_MISO_LUKS_MODULES = ["loop", "dm-snapshot", "dm-crypt"]
 MKINITCPIO_MISO_LUKS_HOOKS = [
     "base", "udev", "miso_shutdown", "miso_luks", "miso_loop_mnt",
@@ -162,6 +171,12 @@ MKINITCPIO_MISO_LUKS_HOOKS = [
 # signal cli.py has that an --encrypt build is possible on this host (same
 # precedent as seed.py's MABOX_SKEL_DIR check).
 MISO_LUKS_HOOK_INSTALLED = Path("/usr/lib/initcpio/hooks/miso_luks")
+
+# Vendored by this package (like miso_luks above and miso_persist below, not
+# manjaro-tools-iso-git) -- see MKINITCPIO_MISO_HOOKS above for why. Checked
+# the same way MISO_PERSIST_HOOK_INSTALLED is below (see
+# isobuild.check_miso_boot_hook_installed()).
+MISO_BOOT_HOOK_INSTALLED = Path("/usr/lib/initcpio/hooks/miso_boot")
 
 # Persistent-USB boot hook (see configs/initcpio/{hooks,install}/
 # miso_persist and docs/superpowers/specs/2026-08-20-persistent-usb-design.md).
@@ -182,27 +197,35 @@ MISO_PERSIST_HOOK_INSTALLED = Path("/usr/lib/initcpio/hooks/miso_persist")
 # decompressing and walking the initramfs cpio itself. Must stay in sync by
 # hand with mabox_persistence_usb.constants.PERSIST_HOOK_MARKER_PATH /
 # MIN_SUPPORTED_HOOK_VERSION -- the two repos share no runtime code, same
-# manual-sync precedent as ISO_VOLID above.
+# manual-sync precedent as ISO_VOLID above. Treated as one monotonically
+# increasing cumulative-capability counter, not independent flags: v1
+# shipped miso_persist, but boot-device resolution always picked the whole
+# disk over any partition of the same device, so persistence never actually
+# activated at boot; v2 (this version) fixes that -- see miso_boot's and
+# miso_luks's _find_dev_by_path() -- so plain MABOX_PERSIST now actually
+# mounts read-write. A future v3 would add a LUKS-unlock branch to
+# miso_persist for --encrypt-persist.
 PERSIST_HOOK_MARKER_RELPATH = Path(MISO_BASEDIR) / ".persist-hook-version"
-PERSIST_HOOK_VERSION = 1
+PERSIST_HOOK_VERSION = 2
 
 # Everything MKINITCPIO_MISO_HOOKS/MKINITCPIO_MISO_LUKS_HOOKS reference that
-# isn't a stock mkinitcpio hook and isn't miso_luks (vendored above): comes
-# from manjaro-tools-iso-git, which packaging/PKGBUILD does NOT depend on
-# (see SOURCES.md). Missing on a host without it, so build_initramfs() would
-# otherwise fail deep inside mkinitcpio -- after the expensive mksquashfs
-# step -- with a bare CalledProcessError instead of a clear message.
-# Checked against install/, not hooks/: mkinitcpio's own run_build_hook()
-# (see /usr/lib/initcpio/functions) resolves a hook by searching ONLY
-# $_d_install ("/etc/initcpio/install:/usr/lib/initcpio/install" by
-# default) for a same-named install script -- that's the literal source of
-# its "Hook 'X' cannot be found" error. The separate hooks/ runtime script
-# is optional and install-only hooks are normal (miso_kms is one: it just
-# loads DRM/KMS modules early, no runtime action needed, same shape as
-# mkinitcpio's own stock "kms" hook) -- checking hooks/ instead produced a
-# false "missing" for miso_kms on a host where it was correctly installed.
+# isn't a stock mkinitcpio hook and isn't miso_luks or miso_boot (vendored
+# above): comes from manjaro-tools-iso-git, which packaging/PKGBUILD does
+# NOT depend on (see SOURCES.md). Missing on a host without it, so
+# build_initramfs() would otherwise fail deep inside mkinitcpio -- after the
+# expensive mksquashfs step -- with a bare CalledProcessError instead of a
+# clear message. Checked against install/, not hooks/: mkinitcpio's own
+# run_build_hook() (see /usr/lib/initcpio/functions) resolves a hook by
+# searching ONLY $_d_install ("/etc/initcpio/install:/usr/lib/initcpio/
+# install" by default) for a same-named install script -- that's the
+# literal source of its "Hook 'X' cannot be found" error. The separate
+# hooks/ runtime script is optional and install-only hooks are normal
+# (miso_kms is one: it just loads DRM/KMS modules early, no runtime action
+# needed, same shape as mkinitcpio's own stock "kms" hook) -- checking
+# hooks/ instead produced a false "missing" for miso_kms on a host where it
+# was correctly installed.
 MISO_EXTERNAL_HOOKS = [
-    "miso", "miso_shutdown", "miso_loop_mnt", "miso_pxe_common",
+    "miso_shutdown", "miso_loop_mnt", "miso_pxe_common",
     "miso_pxe_http", "miso_pxe_nbd", "miso_pxe_nfs", "miso_kms",
 ]
 MISO_HOOK_SEARCH_DIRS = [Path("/etc/initcpio/install"), Path("/usr/lib/initcpio/install")]
