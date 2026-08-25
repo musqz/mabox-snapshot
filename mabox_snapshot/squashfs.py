@@ -22,16 +22,6 @@ def _parse_compressors(help_text: str) -> list[str]:
     return [c for c in SUPPORTED_COMPRESSORS if c in listed]
 
 
-def available_compressors() -> list[str]:
-    """Probe `mksquashfs -help-section compression` for which compressors
-    this host's build actually supports, rather than assuming all of them
-    are compiled in."""
-    result = subprocess.run(
-        ["mksquashfs", "-help-section", "compression"], capture_output=True, text=True
-    )
-    return _parse_compressors(result.stdout + result.stderr)
-
-
 def build_command(
     sources: list[Path],
     dest: Path,

@@ -43,11 +43,12 @@
 # bind-mounting it aside and using the bind mount as this hook's own
 # lowerdir is what lets a second, persistent overlay stack on top without
 # re-deriving miso_mount_handler's internal (bash-local, not exported)
-# list of squashfs layer mountpoints. Nested overlayfs-as-lowerdir has
-# been supported upstream for years and is expected to work fine on
-# Mabox's kernels -- unverified in this repo until a real QEMU boot test
-# (same precedent as miso_luks's original addition), so treat this file
-# as needing that verification before shipping to real hardware.
+# list of squashfs layer mountpoints. Nested overlayfs-as-lowerdir works
+# fine in practice -- confirmed end-to-end on real hardware as of 0.2.6
+# (build, write, boot, reboot, a change made in the live session
+# survived), after two rounds of real-hardware bugfixing in 0.2.5/0.2.6
+# (see CHANGELOG.md) that turned out to be in boot-device resolution and
+# the ISO's own MBR partition type, not in this nested-overlay mechanism.
 
 # Same-device-only by design (decision 1 in the persistent-usb design
 # spec): a fixed literal here, not a lookup, because this hook only ever

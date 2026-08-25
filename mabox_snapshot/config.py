@@ -19,7 +19,6 @@ class SnapshotConfig:
     exclude_folders: tuple[str, ...] = ()
     kernel: str | None = None
     all_kernels: bool = False
-    demo_lang: str = constants.DEFAULT_DEMO_LANG
     no_calamares: bool = False
     skip_space_check: bool = False
     change_threshold_mb: int = 200
