@@ -97,7 +97,6 @@ def _print_explain(
     kvers: dict,
     dest: Path,
     has_splash: bool,
-    branding: bool,
 ) -> None:
     """Plain-language counterpart to the raw-command dry-run block below --
     what the build does, not the exact mksquashfs/xorriso/grub-mkimage
@@ -134,8 +133,7 @@ def _print_explain(
     else:
         steps.append("No custom splash image configured -- the ISO boots with GRUB's plain menu.")
 
-    if args.mode == "reset" and branding:
-        steps.append("Apply Mabox's own Calamares branding.")
+    steps.append("Apply Mabox's own Calamares branding.")
 
     steps.append("Write BIOS and EFI boot images, so the ISO starts on both old and new-style firmware.")
     steps.append("Assemble everything into one bootable ISO file.")
@@ -284,7 +282,10 @@ def cmd_create(args: argparse.Namespace) -> int:
     # entries (see seed.etc_skel_pseudo_specs()), too many for individual
     # -p args, so written to a file and passed via squashfs.py's -pf
     # support instead. Reset mode is untouched -- it already gets this via
-    # seed.seed_etc_skel() in overlay.build_overlay().
+    # seed.seed_etc_skel() in overlay.build_overlay(). Mabox's Calamares
+    # branding (see calamares.build_branding_pseudo_specs()) rides along
+    # in this same file, same reasoning: preserving mode has no overlay
+    # step for that either (see write_branding(), reset mode's version).
     skel_pseudo_file_path = cfg.workdir / "skel-pseudo-file.list" if args.mode == "preserving" else None
     # Always the rootfs layer (plan.layers[0] in both modes, same as the
     # "new_excludes" case further down): without this, a real file already
@@ -302,6 +303,10 @@ def cmd_create(args: argparse.Namespace) -> int:
         # config had ended up copied there) would win over our pseudo-file
         # injection for anything not explicitly covered by it.
         plan.layers[0].exclude_patterns.append("etc/skel/*")
+        # Same reasoning, for Mabox's branding component (see
+        # calamares.build_branding_pseudo_specs()) -- unlikely to already
+        # exist on a stock system, but not something to leave to chance.
+        plan.layers[0].exclude_patterns.append(f"{calamares.BRANDING_TARGET_DIR}/*")
     if cfg.encrypt:
         plan.layers[0].exclude_patterns.append(calamares.SHELLPROCESS_CONF_TARGET_PATH)
         plan.layers[0].exclude_patterns.append(calamares.SHELLPROCESS_CLEANUP_CONF_TARGET_PATH)
@@ -331,8 +336,6 @@ def cmd_create(args: argparse.Namespace) -> int:
     has_splash = splash_source.exists()
     splash_dest = iso_root / "boot" / "grub" / "splash.png"
 
-    branding = args.mode == "reset"
-
     layer_cmds = {
         layer.name: squashfs.build_command(
             [layer.source], layer_dest[layer.name], exclude_files[layer.name], cfg.compression, cfg.compression_level,
@@ -354,7 +357,7 @@ def cmd_create(args: argparse.Namespace) -> int:
     xorriso_cmd = isobuild.build_xorriso_command(iso_root, dest, constants.ISO_VOLID)
 
     if args.explain:
-        _print_explain(args, cfg, plan, profile, selected, kvers, dest, has_splash, branding)
+        _print_explain(args, cfg, plan, profile, selected, kvers, dest, has_splash)
     else:
         print(f"mode:        {plan.mode}")
         print(f"profile:     {profile.name}")
@@ -375,8 +378,7 @@ def cmd_create(args: argparse.Namespace) -> int:
             print(f"splash:      {' '.join(str(c) for c in splash_cmd)}")
         else:
             print(f"splash:      none configured ({splash_source} not found) -- plain grub boot menu")
-        if args.mode == "reset":
-            print(f"calamares:   Mabox branding ({constants.CALAMARES_BRANDING_SRC})")
+        print(f"calamares:   Mabox branding ({constants.CALAMARES_BRANDING_SRC})")
         if cfg.encrypt:
             print(f"unpackfs:    {', '.join(layer.name for layer in plan.layers)} -> {unpackfs_conf_path} (rootfs sourced from live decrypted mount, remounted by an injected Calamares job right before unpackfs runs and closed again right after)")
         else:
@@ -495,22 +497,27 @@ def cmd_create(args: argparse.Namespace) -> int:
     services_override_path.write_text(calamares.SERVICES_CONF_OVERRIDE)
     grubcfg_override_path.write_text(calamares.GRUBCFG_CONF_OVERRIDE)
     if args.mode == "preserving":
-        # Both calamares.CALAMARES_SETTINGS_FILE (missing if calamares
-        # itself isn't installed -- it's OPTIONAL_TOOLS, only warned about
-        # by `doctor`, never required) and seed.etc_skel_pseudo_specs()
-        # (missing vendored mabox-skel) can raise here; remove_users_step()
-        # can also raise ValueError if its anchor line is ever missing.
-        # Same catch-and-report pattern as overlay.build_overlay() above --
-        # by this point the build has already required root and wiped the
+        # calamares.CALAMARES_SETTINGS_FILE (missing if calamares itself
+        # isn't installed -- it's OPTIONAL_TOOLS, only warned about by
+        # `doctor`, never required), constants.CALAMARES_BRANDING_SRC
+        # (missing if mabox-snapshot itself isn't properly installed via
+        # its package), and seed.etc_skel_pseudo_specs() (missing vendored
+        # mabox-skel) can all raise here; remove_users_step() can also
+        # raise ValueError if its anchor line is ever missing. Same
+        # catch-and-report pattern as overlay.build_overlay() above -- by
+        # this point the build has already required root and wiped the
         # previous workdir, so a raw traceback here would be a much worse
         # experience than the same "error: ...; return 1" every other
         # failure in this function already gets.
         try:
-            settings_text = calamares.remove_users_step(constants.CALAMARES_SETTINGS_FILE.read_text())
+            settings_text = calamares.repoint_branding(constants.CALAMARES_SETTINGS_FILE.read_text())
+            settings_text = calamares.remove_users_step(settings_text)
             if cfg.encrypt:
                 settings_text = calamares.insert_live_source_job(settings_text)
             settings_conf_path.write_text(settings_text)
-            skel_pseudo_file_path.write_text("\n".join(seed.etc_skel_pseudo_specs()) + "\n")
+            branding_files = sorted(p for p in constants.CALAMARES_BRANDING_SRC.iterdir() if p.is_file())
+            pseudo_specs = seed.etc_skel_pseudo_specs() + calamares.build_branding_pseudo_specs(branding_files)
+            skel_pseudo_file_path.write_text("\n".join(pseudo_specs) + "\n")
         except (FileNotFoundError, ValueError) as e:
             print(f"error: {e}", file=sys.stderr)
             return 1
