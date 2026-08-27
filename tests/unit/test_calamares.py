@@ -49,6 +49,31 @@ def test_write_settings_override_always_inserts_removeuser(tmp_path):
     assert lines[users_indices[-1] + 1] == "  - removeuser"
 
 
+def test_check_branding_installed_passes_when_dir_has_files(tmp_path):
+    src_dir = tmp_path / "calamares-branding"
+    src_dir.mkdir()
+    (src_dir / "branding.desc").write_text("componentName: mabox\n")
+
+    calamares.check_branding_installed(src_dir)  # no raise
+
+
+def test_check_branding_installed_raises_when_dir_missing(tmp_path):
+    src_dir = tmp_path / "calamares-branding"  # never created
+
+    with pytest.raises(FileNotFoundError, match=str(src_dir)):
+        calamares.check_branding_installed(src_dir)
+
+
+def test_check_branding_installed_raises_when_dir_empty(tmp_path):
+    """A partial install can leave the directory itself present but with
+    none of the branding files in it -- treated the same as missing."""
+    src_dir = tmp_path / "calamares-branding"
+    src_dir.mkdir()
+
+    with pytest.raises(FileNotFoundError):
+        calamares.check_branding_installed(src_dir)
+
+
 def test_write_branding_copies_every_file_from_src_dir(tmp_path):
     src_dir = tmp_path / "branding-src"
     src_dir.mkdir()

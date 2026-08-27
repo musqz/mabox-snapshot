@@ -39,6 +39,23 @@ from pathlib import Path
 from . import constants
 
 
+def check_branding_installed(src_dir: Path = constants.CALAMARES_BRANDING_SRC) -> None:
+    """Both build modes apply Mabox's own Calamares branding unconditionally
+    (see write_branding() / build_branding_pseudo_specs()), reading it from
+    src_dir -- a static asset the package installs at
+    constants.CALAMARES_BRANDING_SRC. A stale or partial install can leave
+    it missing (the rest of /usr/share/mabox-snapshot present, this one dir
+    not), and without this check the build only trips over it deep inside
+    cmd_create(), after the root prompt and workdir wipe, as a bare
+    '[Errno 2] No such file or directory'. Fail early and say what to do."""
+    if not src_dir.is_dir() or not any(p.is_file() for p in src_dir.iterdir()):
+        raise FileNotFoundError(
+            f"Mabox Calamares branding not found at {src_dir} -- is mabox-snapshot installed "
+            "via its package? A stale or partial build can be missing this directory; "
+            "reinstall the package to restore it"
+        )
+
+
 def write_branding(overlay_dir: Path, src_dir: Path = constants.CALAMARES_BRANDING_SRC) -> None:
     """Copies Mabox's static Calamares branding -- branding.desc, show.qml,
     and their slideshow/logo images -- into overlay_dir's branding
