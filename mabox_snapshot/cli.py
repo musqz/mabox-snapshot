@@ -44,6 +44,13 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
         else:
             print(f"[warn] {tool} not found (optional)")
 
+    try:
+        calamares.check_branding_installed()
+        print(f"[ok]   Mabox Calamares branding present at {constants.CALAMARES_BRANDING_SRC}")
+    except FileNotFoundError as e:
+        print(f"[fail] {e}")
+        ok = False
+
     usage = shutil.disk_usage(constants.DEFAULT_WORKDIR.parent if constants.DEFAULT_WORKDIR.parent.exists() else "/")
     free_gib = usage.free / (1024**3)
     print(f"[info] {free_gib:.1f} GiB free at {constants.DEFAULT_WORKDIR.parent}")
@@ -404,6 +411,11 @@ def cmd_create(args: argparse.Namespace) -> int:
             # --encrypt build uses miso_luks instead (see luks.check_hook_installed()
             # below), which never references miso_boot at all.
             isobuild.check_miso_boot_hook_installed()
+        # Both modes read this later (overlay.build_overlay() for reset,
+        # the pseudo-spec block for preserving) -- check it here, before the
+        # workdir wipe, so a stale/partial install fails with an actionable
+        # message instead of a bare '[Errno 2]' mid-build.
+        calamares.check_branding_installed()
     except FileNotFoundError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1

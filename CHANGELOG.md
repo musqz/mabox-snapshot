@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- `create` now checks for the packaged Calamares branding assets
+  (`/usr/share/mabox-snapshot/calamares-branding/`) up front, before the
+  root prompt and workdir wipe, and `doctor` reports on them too. A stale
+  or partial install that was missing just that directory previously
+  failed mid-build with a bare `[Errno 2] No such file or directory`;
+  both commands now say what is wrong and that reinstalling the package
+  fixes it.
+
 ## 0.2.8
 
 - Both build modes now ship Mabox's own Calamares installer branding
