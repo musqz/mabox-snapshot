@@ -20,8 +20,6 @@ Both modes support a user-editable exclude list (`excludes add/remove/edit`), pl
 
 ## Installation
 
-Arch/Manjaro-based only (Mabox itself, or any Arch derivative with the same dependencies).
-
 From Mabox repo
 ```
 pacman -S mabox-snapshot
