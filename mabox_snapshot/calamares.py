@@ -19,6 +19,11 @@ by overlay.py's build_overlay()), preserving mode has no overlay step to
 write into so it goes in as mksquashfs pseudo-files straight into the
 rootfs layer instead (build_branding_pseudo_specs(), consumed by cli.py
 alongside seed.etc_skel_pseudo_specs() in the same pseudo-file list).
+The one build-time-dynamic part is branding.desc's version strings: the
+shipped file carries a "1.0" placeholder, rewritten from /etc/lsb-release
+(DISTRIB_RELEASE + DISTRIB_CODENAME, e.g. "26.08 Istredd") by
+render_branding_desc() -- Mabox's /etc/os-release has no version field at
+all, and Calamares' own branding.desc substitution only reads os-release.
 This used to be builder-configurable via a slide-*.png + branding.toml
 pair under IMAGES_DIR, but this tool is Mabox-specific throughout
 (DEMO_USERNAME, MISO_BASEDIR, ISO_VOLID, ...) and nobody had actually
@@ -39,6 +44,14 @@ from pathlib import Path
 from . import constants
 
 
+# branding.desc ships placeholder version strings ("1.0"); render_branding_desc()
+# rewrites them from /etc/lsb-release at build time. Named here so that
+# write_branding() (reset mode) and cli.py's preserving-mode path -- which
+# renders into a workdir file, since it has no overlay to write into -- agree
+# on the filename.
+BRANDING_DESC_NAME = "branding.desc"
+
+
 def check_branding_installed(src_dir: Path = constants.CALAMARES_BRANDING_SRC) -> None:
     """Both build modes apply Mabox's own Calamares branding unconditionally
     (see write_branding() / build_branding_pseudo_specs()), reading it from
@@ -47,24 +60,85 @@ def check_branding_installed(src_dir: Path = constants.CALAMARES_BRANDING_SRC) -
     it missing (the rest of /usr/share/mabox-snapshot present, this one dir
     not), and without this check the build only trips over it deep inside
     cmd_create(), after the root prompt and workdir wipe, as a bare
-    '[Errno 2] No such file or directory'. Fail early and say what to do."""
-    if not src_dir.is_dir() or not any(p.is_file() for p in src_dir.iterdir()):
+    '[Errno 2] No such file or directory'. Fail early and say what to do.
+    branding.desc specifically is required, not just "some file": it's the
+    component's manifest -- without it Calamares falls back to its own
+    default (non-Mabox, "1.0") branding, and both modes now read it directly
+    to render the real version in (see render_branding_desc()), so a dir
+    holding only the slideshow images is still a broken install."""
+    if not src_dir.is_dir() or not (src_dir / BRANDING_DESC_NAME).is_file():
         raise FileNotFoundError(
-            f"Mabox Calamares branding not found at {src_dir} -- is mabox-snapshot installed "
-            "via its package? A stale or partial build can be missing this directory; "
-            "reinstall the package to restore it"
+            f"Mabox Calamares branding not found at {src_dir} (no {BRANDING_DESC_NAME}) -- is "
+            "mabox-snapshot installed via its package? A stale or partial build can be missing "
+            "this directory; reinstall the package to restore it"
         )
 
 
-def write_branding(overlay_dir: Path, src_dir: Path = constants.CALAMARES_BRANDING_SRC) -> None:
-    """Copies Mabox's static Calamares branding -- branding.desc, show.qml,
-    and their slideshow/logo images -- into overlay_dir's branding
-    component, verbatim. Reset mode only -- see build_branding_pseudo_specs()
-    for preserving mode's equivalent."""
+def lsb_release_versioned_name(lsb_release_text: str) -> str | None:
+    """"<DISTRIB_RELEASE> <DISTRIB_CODENAME>" from /etc/lsb-release's contents
+    -- e.g. "26.08 Istredd" -- or None if either field is missing. Mabox's
+    /etc/os-release carries no version at all (ID=manjaro, BUILD_ID=rolling),
+    and Calamares' branding.desc @{} substitution only reads os-release, so
+    lsb-release is the only place the real release identity can come from.
+    Equivalent to the awk one-liner
+    `awk -F= '/DISTRIB_RELEASE=/{printf $2" "} /CODENAME/{print $2}'`."""
+    fields = {}
+    for line in lsb_release_text.splitlines():
+        key, sep, value = line.partition("=")
+        if sep:
+            fields[key.strip()] = value.strip().strip('"')
+    release = fields.get("DISTRIB_RELEASE")
+    codename = fields.get("DISTRIB_CODENAME")
+    if not release or not codename:
+        return None
+    return f"{release} {codename}"
+
+
+def render_branding_desc(branding_desc_text: str, lsb_release_text: str) -> str:
+    """Rewrites branding.desc's placeholder version strings from
+    /etc/lsb-release's contents -- version/shortVersion become the bare
+    "<release> <codename>", versionedName/shortVersionedName get the product
+    name prepended. Returns the text unchanged if the release/codename can't
+    be resolved (see lsb_release_versioned_name()) -- better the shipped
+    placeholder than a half-filled "Mabox Linux " on the welcome page."""
+    versioned = lsb_release_versioned_name(lsb_release_text)
+    if versioned is None:
+        return branding_desc_text
+    values = {
+        "version": versioned,
+        "shortVersion": versioned,
+        "versionedName": f"Mabox Linux {versioned}",
+        "shortVersionedName": f"Mabox {versioned}",
+    }
+    for key, value in values.items():
+        branding_desc_text = re.sub(
+            rf"(?m)^([ \t]*{key}:[ \t]*).*$",
+            lambda m, v=value: m.group(1) + v,
+            branding_desc_text,
+        )
+    return branding_desc_text
+
+
+def write_branding(
+    overlay_dir: Path,
+    src_dir: Path = constants.CALAMARES_BRANDING_SRC,
+    lsb_release_file: Path = constants.LSB_RELEASE_FILE,
+) -> None:
+    """Copies Mabox's Calamares branding -- branding.desc, show.qml, and
+    their slideshow/logo images -- into overlay_dir's branding component.
+    branding.desc's placeholder version strings are rewritten from
+    lsb_release_file first (see render_branding_desc()); every other file is
+    copied verbatim. Reset mode only -- see build_branding_pseudo_specs() /
+    cli.py for preserving mode's equivalent."""
     branding_dir = overlay_dir / "etc/calamares/branding" / constants.CALAMARES_BRANDING_COMPONENT
     branding_dir.mkdir(parents=True, exist_ok=True)
+    lsb_release_text = lsb_release_file.read_text() if lsb_release_file.exists() else ""
     for item in src_dir.iterdir():
-        if item.is_file():
+        if not item.is_file():
+            continue
+        if item.name == BRANDING_DESC_NAME:
+            (branding_dir / item.name).write_text(render_branding_desc(item.read_text(), lsb_release_text))
+        else:
             shutil.copy2(item, branding_dir / item.name)
 
 
@@ -78,13 +152,16 @@ BRANDING_TARGET_DIR = f"etc/calamares/branding/{constants.CALAMARES_BRANDING_COM
 
 
 def build_branding_pseudo_specs(files: list[Path]) -> list[str]:
-    """mksquashfs -p specs injecting Mabox's static Calamares branding
-    files directly into a squashed rootfs layer -- preserving mode's
-    equivalent of write_branding(), which reset mode uses instead (no
-    overlay step to write into here). files is the actual directory
-    listing of constants.CALAMARES_BRANDING_SRC, gathered by the caller
-    (see cli.py) rather than here, so this function stays pure and
-    testable without touching the real filesystem."""
+    """mksquashfs -p specs injecting Mabox's Calamares branding files
+    directly into a squashed rootfs layer -- preserving mode's equivalent
+    of write_branding(), which reset mode uses instead (no overlay step to
+    write into here). files is the actual directory listing of
+    constants.CALAMARES_BRANDING_SRC, gathered by the caller (see cli.py)
+    rather than here, so this function stays pure and testable without
+    touching the real filesystem -- except the caller swaps in a workdir
+    copy of branding.desc with its version strings already rendered from
+    /etc/lsb-release (see render_branding_desc()), keeping its
+    BRANDING_DESC_NAME filename so the target path is unchanged."""
     specs = [
         "etc/calamares/branding d 755 0 0",
         f"{BRANDING_TARGET_DIR} d 755 0 0",

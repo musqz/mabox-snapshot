@@ -6,6 +6,14 @@ from pathlib import Path
 OS_RELEASE_FILE = Path("/etc/os-release")
 OS_RELEASE_NAME_MARKER = "Mabox"
 
+# /etc/lsb-release carries the Mabox release + codename (DISTRIB_RELEASE,
+# DISTRIB_CODENAME) that /etc/os-release lacks entirely on Mabox (ID=manjaro,
+# BUILD_ID=rolling, no VERSION*). Calamares' branding.desc only substitutes
+# strings from os-release, never lsb-release, so calamares.render_branding_desc()
+# reads this at build time to bake the real versioned name into the installer
+# branding instead of shipping branding.desc's "1.0" placeholder.
+LSB_RELEASE_FILE = Path("/etc/lsb-release")
+
 SYSTEM_CONFIG_FILE = Path("/etc/mabox-snapshot/mabox-snapshot.conf")
 USER_CONFIG_FILE = Path("~/.config/mabox-snapshot/mabox-snapshot.conf").expanduser()
 EXCLUDES_LIST_FILE = Path("/etc/mabox-snapshot/excludes.list")
