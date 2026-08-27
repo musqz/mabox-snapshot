@@ -29,17 +29,7 @@ optdepends=(
 )
 makedepends=('python-build' 'python-installer' 'python-hatchling')
 checkdepends=('python-pytest')
-backup=(
-    'etc/mabox-snapshot/excludes.list'
-    'etc/mabox-snapshot/images/slide-0.png'
-    'etc/mabox-snapshot/images/slide-1.png'
-    'etc/mabox-snapshot/images/slide-2.png'
-    'etc/mabox-snapshot/images/slide-3.png'
-    'etc/mabox-snapshot/images/slide-4.png'
-    'etc/mabox-snapshot/images/slide-5.png'
-    'etc/mabox-snapshot/images/slide-6.png'
-    'etc/mabox-snapshot/images/slide-7.png'
-)
+backup=('etc/mabox-snapshot/excludes.list')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
 sha256sums=('dc5b4f5de46754cc2ce6a641f5b2c436a6fd8a71aac2c49e3c4ca675b908b437')
 
@@ -62,16 +52,14 @@ package() {
     install -Dm644 configs/excludes.list.default \
         "$pkgdir/etc/mabox-snapshot/excludes.list"
 
-    # Default Calamares reset-mode branding (see mabox_snapshot/calamares.py's
-    # load_branding() -- IMAGES_DIR is otherwise empty and entirely optional,
-    # which silently left every build showing Calamares' stock Manjaro
-    # branding). Marked in backup=() above like excludes.list: a builder who
-    # drops their own slide-*.png here is customizing, not something a
-    # package upgrade should ever silently clobber.
-    for i in 0 1 2 3 4 5 6 7; do
-        install -Dm644 "configs/calamares-images/slide-$i.png" \
-            "$pkgdir/etc/mabox-snapshot/images/slide-$i.png"
-    done
+    # Mabox's own static Calamares reset-mode branding (see
+    # mabox_snapshot/calamares.py's write_branding()) -- branding.desc,
+    # show.qml, and their images, copied verbatim into every reset-mode
+    # build's branding component. Not under /etc / backup=(): this is
+    # Mabox's fixed product identity, not something a builder is meant to
+    # customize per-build.
+    mkdir -p "$pkgdir/usr/share/mabox-snapshot"
+    cp -a configs/calamares-branding "$pkgdir/usr/share/mabox-snapshot/calamares-branding"
 
     mkdir -p "$pkgdir/usr/share/mabox-snapshot/mabox-skel"
     cp -a configs/mabox-skel/skel "$pkgdir/usr/share/mabox-snapshot/mabox-skel/skel"

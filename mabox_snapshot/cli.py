@@ -97,7 +97,7 @@ def _print_explain(
     kvers: dict,
     dest: Path,
     has_splash: bool,
-    branding,
+    branding: bool,
 ) -> None:
     """Plain-language counterpart to the raw-command dry-run block below --
     what the build does, not the exact mksquashfs/xorriso/grub-mkimage
@@ -135,7 +135,7 @@ def _print_explain(
         steps.append("No custom splash image configured -- the ISO boots with GRUB's plain menu.")
 
     if args.mode == "reset" and branding:
-        steps.append(f"Apply custom Calamares branding ({len(branding.slides)} slide(s)).")
+        steps.append("Apply Mabox's own Calamares branding.")
 
     steps.append("Write BIOS and EFI boot images, so the ISO starts on both old and new-style firmware.")
     steps.append("Assemble everything into one bootable ISO file.")
@@ -250,8 +250,7 @@ def cmd_create(args: argparse.Namespace) -> int:
     # same treatment as initcpio_override_path above.
     services_override_path = cfg.workdir / "services-override.conf"
     # Calamares' own grubcfg module overwrites the target's GRUB_DISTRIBUTOR
-    # from whatever branding component is active (stock 'manjaro' unless
-    # custom branding is configured -- see calamares.py's
+    # from whatever branding component is active (see calamares.py's
     # GRUBCFG_CONF_OVERRIDE), clobbering the correct value a real Mabox
     # snapshot already carries in its own /etc/default/grub. Confirmed
     # against a real install: the installed system's GRUB menu read
@@ -265,7 +264,7 @@ def cmd_create(args: argparse.Namespace) -> int:
     # username collision during install hard-aborts before grubcfg/
     # bootloader ever run, confirmed against a real install). Reset mode
     # handles its own settings.conf separately, via overlay.py's
-    # write_settings_override()/build_calamares_branding().
+    # write_settings_override()/write_branding().
     settings_conf_path = cfg.workdir / "settings-preserving.conf" if args.mode == "preserving" else None
     shellprocess_conf_path = cfg.workdir / "shellprocess-remount.conf" if cfg.encrypt else None
     shellprocess_cleanup_conf_path = cfg.workdir / "shellprocess-cleanup.conf" if cfg.encrypt else None
@@ -332,7 +331,7 @@ def cmd_create(args: argparse.Namespace) -> int:
     has_splash = splash_source.exists()
     splash_dest = iso_root / "boot" / "grub" / "splash.png"
 
-    branding = calamares.load_branding() if args.mode == "reset" else None
+    branding = args.mode == "reset"
 
     layer_cmds = {
         layer.name: squashfs.build_command(
@@ -377,8 +376,7 @@ def cmd_create(args: argparse.Namespace) -> int:
         else:
             print(f"splash:      none configured ({splash_source} not found) -- plain grub boot menu")
         if args.mode == "reset":
-            note = f"{len(branding.slides)} slide(s) from {constants.IMAGES_DIR}" if branding else "none configured -- stock Manjaro branding"
-            print(f"calamares:   {note}")
+            print(f"calamares:   Mabox branding ({constants.CALAMARES_BRANDING_SRC})")
         if cfg.encrypt:
             print(f"unpackfs:    {', '.join(layer.name for layer in plan.layers)} -> {unpackfs_conf_path} (rootfs sourced from live decrypted mount, remounted by an injected Calamares job right before unpackfs runs and closed again right after)")
         else:

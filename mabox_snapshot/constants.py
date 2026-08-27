@@ -273,18 +273,31 @@ ISO_LUKS_MAPPER_NAME = "mabox_rootfs"
 # the time either mechanism runs.
 MISO_LUKS_LIVE_ROOTFS_MOUNT = "/run/mabox-snapshot/live-source"
 
-# User-editable branding source, same convention as EXCLUDES_LIST_FILE
-# (plain directory under /etc/mabox-snapshot, no separate per-user split).
+# GRUB splash source, user-configurable (see cli.py's splash_source /
+# has_splash) -- plain directory under /etc/mabox-snapshot, same
+# convention as EXCLUDES_LIST_FILE, no separate per-user split. Calamares
+# branding used to read a slide-*.png + branding.toml pair from here too;
+# now a static packaged asset instead (see CALAMARES_BRANDING_SRC below)
+# -- Mabox's own branding isn't something meant to vary per build.
+IMAGES_DIR = Path("/etc/mabox-snapshot/images")
+
 # Verified on this host: the *installed* calamares package already ships a
 # complete, safe settings.conf + module confs at CALAMARES_SETTINGS_FILE's
-# directory (git.maboxlinux.org has no Mabox-specific Calamares repo, so
-# there's nothing to vendor there -- Mabox installs just inherit stock
-# Manjaro branding unless this tool overrides it). This tool only ever
-# swaps *which branding component* settings.conf points at; the install
-# sequence itself (partition/bootloader/users/...) is never touched.
-IMAGES_DIR = Path("/etc/mabox-snapshot/images")
+# directory. This tool only ever swaps *which branding component*
+# settings.conf points at (to CALAMARES_BRANDING_COMPONENT, populated from
+# CALAMARES_BRANDING_SRC -- see calamares.py's write_branding()); the
+# install sequence itself (partition/bootloader/users/...) is never
+# touched.
 CALAMARES_SETTINGS_FILE = Path("/usr/share/calamares/settings.conf")
 CALAMARES_BRANDING_COMPONENT = "mabox"
-MABOX_LOGO_SVG = MABOX_SKEL_DIR / ".icons" / "mabox-logo-square.svg"
-DEFAULT_CALAMARES_PRODUCT_NAME = "Mabox Linux"
-DEFAULT_TEXT_RADIUS = 8
+
+# Mabox's actual Calamares branding -- branding.desc, show.qml, and their
+# slideshow/logo images, the same assets that produce Mabox's own
+# live-ISO install branding (extracted from a running Mabox VM's
+# /etc/calamares/branding/manjaro). Deliberately static, not
+# builder-configurable: this is an official Mabox tool now, not a
+# generic remaster utility, so one fixed identity beats a
+# template/config layer nobody was actually using. Installed by the
+# package (see packaging/PKGBUILD); vendored copy in
+# configs/calamares-branding/ during development.
+CALAMARES_BRANDING_SRC = SHARE_DIR / "calamares-branding"
