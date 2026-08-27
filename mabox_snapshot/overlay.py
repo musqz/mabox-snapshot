@@ -95,19 +95,19 @@ def build_overlay(plan: BuildPlan) -> None:
     the same skel tree seeded to etc/skel/ (so an account created later
     -- Calamares' users job during install, or a plain useradd -- gets
     Mabox's own desktop too, not the rootfs layer's bare stock skel; see
-    seed.seed_etc_skel()), (if configured) custom Calamares branding, and
-    -- unconditionally, independent of branding -- the removeuser
-    override that strips reset mode's demo account back out during
-    install (see calamares.py's insert_removeuser_job()). Then
-    umask-normalized, then the sanitized passwd/shadow/group/etc written
-    last (each self-chmod'd -- see sanitize.py -- so write order
-    relative to normalize() doesn't matter for their permissions)."""
+    seed.seed_etc_skel()), Mabox's own Calamares branding, and --
+    unconditionally, independent of branding -- the removeuser override
+    that strips reset mode's demo account back out during install (see
+    calamares.py's insert_removeuser_job()). Then umask-normalized, then
+    the sanitized passwd/shadow/group/etc written last (each
+    self-chmod'd -- see sanitize.py -- so write order relative to
+    normalize() doesn't matter for their permissions)."""
     if plan.mode != "reset":
         return
     seed.seed_demo_home(plan.overlay_dir)
     seed.seed_etc_skel(plan.overlay_dir)
-    if not calamares.build_calamares_branding(plan.overlay_dir):
-        calamares.write_settings_override(plan.overlay_dir)
+    calamares.write_branding(plan.overlay_dir)
+    calamares.write_settings_override(plan.overlay_dir)
     calamares.write_removeuser_override(plan.overlay_dir)
     permissions.normalize(plan.overlay_dir)
     sanitize.write_sanitized_files(plan.overlay_dir)

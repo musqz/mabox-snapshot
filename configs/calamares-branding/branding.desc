@@ -1,0 +1,28 @@
+---
+componentName: mabox
+
+strings:
+    productName:         Mabox Linux
+    shortProductName:    Mabox
+    version:             1.0
+    shortVersion:        1.0
+    versionedName:       Mabox Linux 1.0
+    shortVersionedName:  Mabox 1.0
+    bootloaderEntryName: Mabox
+
+images:
+    productLogo:         "mabox-logo-full.png"
+    productIcon:         "mabox-icon.png"
+    productWelcome:      "mabox.png"
+
+slideshow:               "show.qml"
+
+slideshowAPI: 1
+
+style:
+   SidebarBackground:    "#BDB993"
+   SidebarBackgroundCurrent:    "#E8E8DD"
+   SidebarText:          "#222222"
+   SidebarTextCurrent:    "#000000"
+
+windowExpanding:  noexpand

@@ -52,6 +52,15 @@ package() {
     install -Dm644 configs/excludes.list.default \
         "$pkgdir/etc/mabox-snapshot/excludes.list"
 
+    # Mabox's own static Calamares reset-mode branding (see
+    # mabox_snapshot/calamares.py's write_branding()) -- branding.desc,
+    # show.qml, and their images, copied verbatim into every reset-mode
+    # build's branding component. Not under /etc / backup=(): this is
+    # Mabox's fixed product identity, not something a builder is meant to
+    # customize per-build.
+    mkdir -p "$pkgdir/usr/share/mabox-snapshot"
+    cp -a configs/calamares-branding "$pkgdir/usr/share/mabox-snapshot/calamares-branding"
+
     mkdir -p "$pkgdir/usr/share/mabox-snapshot/mabox-skel"
     cp -a configs/mabox-skel/skel "$pkgdir/usr/share/mabox-snapshot/mabox-skel/skel"
 
