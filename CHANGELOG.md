@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.8
+## 0.2.8 (upcomming)
 
 - Both build modes now ship Mabox's own Calamares installer branding
   (logo, sidebar colors, slideshow) instead of falling back to stock
