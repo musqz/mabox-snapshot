@@ -104,6 +104,7 @@ def _print_explain(
     kvers: dict,
     dest: Path,
     has_splash: bool,
+    branding_versioned_name: str | None,
 ) -> None:
     """Plain-language counterpart to the raw-command dry-run block below --
     what the build does, not the exact mksquashfs/xorriso/grub-mkimage
@@ -135,7 +136,10 @@ def _print_explain(
     plural = "s" if len(selected) > 1 else ""
     steps.append(f"Build a fresh initramfs for kernel{plural} {kernel_list}, so the ISO can boot and find its own rootfs.sfs.")
 
-    steps.append("Apply Mabox's own Calamares branding.")
+    if branding_versioned_name:
+        steps.append(f"Apply Mabox's own Calamares branding, labelled \"Mabox Linux {branding_versioned_name}\" (from /etc/lsb-release).")
+    else:
+        steps.append("Apply Mabox's own Calamares branding.")
 
     steps.append("Write BIOS and EFI boot images, so the ISO starts on both old and new-style firmware.")
     steps.append("Assemble everything into one bootable ISO file.")
@@ -342,6 +346,14 @@ def cmd_create(args: argparse.Namespace) -> int:
     has_splash = splash_source.exists()
     splash_dest = iso_root / "boot" / "grub" / "splash.png"
 
+    # Baked into the Calamares branding.desc at build time (see
+    # calamares.render_branding_desc()); None if this host's /etc/lsb-release
+    # lacks the release/codename, in which case branding.desc keeps its
+    # shipped "1.0" placeholder.
+    branding_versioned_name = calamares.lsb_release_versioned_name(
+        constants.LSB_RELEASE_FILE.read_text() if constants.LSB_RELEASE_FILE.exists() else ""
+    )
+
     layer_cmds = {
         layer.name: squashfs.build_command(
             [layer.source], layer_dest[layer.name], exclude_files[layer.name], cfg.compression, cfg.compression_level,
@@ -363,7 +375,7 @@ def cmd_create(args: argparse.Namespace) -> int:
     xorriso_cmd = isobuild.build_xorriso_command(iso_root, dest, constants.ISO_VOLID)
 
     if args.explain:
-        _print_explain(args, cfg, plan, profile, selected, kvers, dest, has_splash)
+        _print_explain(args, cfg, plan, profile, selected, kvers, dest, has_splash, branding_versioned_name)
     else:
         print(f"mode:        {plan.mode}")
         print(f"profile:     {profile.name}")
@@ -384,7 +396,11 @@ def cmd_create(args: argparse.Namespace) -> int:
             print(f"splash:      {' '.join(str(c) for c in splash_cmd)}")
         else:
             print(f"splash:      none configured ({splash_source} not found) -- plain grub boot menu")
-        print(f"calamares:   Mabox branding ({constants.CALAMARES_BRANDING_SRC})")
+        branding_label = (
+            f"Mabox Linux {branding_versioned_name}" if branding_versioned_name
+            else 'shipped placeholder "1.0" (no DISTRIB_RELEASE/DISTRIB_CODENAME in /etc/lsb-release)'
+        )
+        print(f"calamares:   Mabox branding, {branding_label} ({constants.CALAMARES_BRANDING_SRC})")
         if cfg.encrypt:
             print(f"unpackfs:    {', '.join(layer.name for layer in plan.layers)} -> {unpackfs_conf_path} (rootfs sourced from live decrypted mount, remounted by an injected Calamares job right before unpackfs runs and closed again right after)")
         else:
@@ -527,6 +543,20 @@ def cmd_create(args: argparse.Namespace) -> int:
                 settings_text = calamares.insert_live_source_job(settings_text)
             settings_conf_path.write_text(settings_text)
             branding_files = sorted(p for p in constants.CALAMARES_BRANDING_SRC.iterdir() if p.is_file())
+            # branding.desc goes in with its "1.0" placeholder version strings
+            # rewritten from this build host's /etc/lsb-release (see
+            # calamares.render_branding_desc()) -- rendered into a workdir copy
+            # here, since preserving mode has no overlay step to write into, and
+            # swapped in for the vendored source file under its own filename so
+            # build_branding_pseudo_specs()'s target path is unchanged.
+            branding_desc_path = cfg.workdir / calamares.BRANDING_DESC_NAME
+            branding_desc_path.write_text(
+                calamares.render_branding_desc(
+                    (constants.CALAMARES_BRANDING_SRC / calamares.BRANDING_DESC_NAME).read_text(),
+                    constants.LSB_RELEASE_FILE.read_text() if constants.LSB_RELEASE_FILE.exists() else "",
+                )
+            )
+            branding_files = [branding_desc_path if p.name == calamares.BRANDING_DESC_NAME else p for p in branding_files]
             pseudo_specs = seed.etc_skel_pseudo_specs() + calamares.build_branding_pseudo_specs(branding_files)
             skel_pseudo_file_path.write_text("\n".join(pseudo_specs) + "\n")
         except (FileNotFoundError, ValueError) as e:

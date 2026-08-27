@@ -10,6 +10,67 @@ SETTINGS_CONF_FIXTURE = (
     "sequence:\n- show:\n  - users\n- exec:\n  - unpackfs\n  - users\n  - services\n"
 )
 
+LSB_RELEASE_FIXTURE = (
+    "DISTRIB_ID=MaboxLinux\n"
+    "DISTRIB_RELEASE=26.08\n"
+    "DISTRIB_CODENAME=Istredd\n"
+    'DISTRIB_DESCRIPTION="Mabox Linux"\n'
+)
+
+BRANDING_DESC_FIXTURE = (
+    "---\n"
+    "componentName: mabox\n"
+    "\n"
+    "strings:\n"
+    "    productName:         Mabox Linux\n"
+    "    shortProductName:    Mabox\n"
+    "    version:             1.0\n"
+    "    shortVersion:        1.0\n"
+    "    versionedName:       Mabox Linux 1.0\n"
+    "    shortVersionedName:  Mabox 1.0\n"
+    "    bootloaderEntryName: Mabox\n"
+)
+
+
+def test_lsb_release_versioned_name_joins_release_and_codename():
+    assert calamares.lsb_release_versioned_name(LSB_RELEASE_FIXTURE) == "26.08 Istredd"
+
+
+def test_lsb_release_versioned_name_strips_quotes_and_surrounding_whitespace():
+    text = 'DISTRIB_RELEASE = "26.08" \nDISTRIB_CODENAME =  Istredd\n'
+    assert calamares.lsb_release_versioned_name(text) == "26.08 Istredd"
+
+
+def test_lsb_release_versioned_name_none_when_a_field_is_missing_or_empty():
+    assert calamares.lsb_release_versioned_name("DISTRIB_RELEASE=26.08\n") is None
+    assert calamares.lsb_release_versioned_name("DISTRIB_RELEASE=\nDISTRIB_CODENAME=Istredd\n") is None
+    assert calamares.lsb_release_versioned_name("") is None
+
+
+def test_render_branding_desc_rewrites_all_four_version_strings():
+    result = calamares.render_branding_desc(BRANDING_DESC_FIXTURE, LSB_RELEASE_FIXTURE)
+    assert "version:             26.08 Istredd" in result
+    assert "shortVersion:        26.08 Istredd" in result
+    assert "versionedName:       Mabox Linux 26.08 Istredd" in result
+    assert "shortVersionedName:  Mabox 26.08 Istredd" in result
+    assert "1.0" not in result
+    # lines outside the version set survive untouched
+    assert "productName:         Mabox Linux" in result
+    assert "bootloaderEntryName: Mabox" in result
+
+
+def test_render_branding_desc_version_rule_does_not_also_hit_versionedname():
+    """'version:' is a prefix of 'versionedName' -- the anchored regex must
+    not rewrite the versionedName line too (it would prepend nothing and
+    clobber the product name), only the dedicated versionedName rule does."""
+    result = calamares.render_branding_desc(BRANDING_DESC_FIXTURE, LSB_RELEASE_FIXTURE)
+    assert result.count("versionedName:") == 1
+    assert "versionedName:       Mabox Linux 26.08 Istredd" in result
+
+
+def test_render_branding_desc_unchanged_when_lsb_release_unresolvable():
+    assert calamares.render_branding_desc(BRANDING_DESC_FIXTURE, "") == BRANDING_DESC_FIXTURE
+
 
 def test_repoint_branding_replaces_component():
     result = calamares.repoint_branding("modules-search: [ local ]\nbranding: manjaro\nprompt-install: false\n")
@@ -74,6 +135,20 @@ def test_check_branding_installed_raises_when_dir_empty(tmp_path):
         calamares.check_branding_installed(src_dir)
 
 
+def test_check_branding_installed_raises_when_branding_desc_missing(tmp_path):
+    """The component manifest specifically is load-bearing -- a dir holding
+    only the slideshow images (Calamares would fall back to its own default
+    branding, and render_branding_desc() has nothing to read) is a broken
+    install, not a usable one."""
+    src_dir = tmp_path / "calamares-branding"
+    src_dir.mkdir()
+    (src_dir / "1.png").write_bytes(b"fake-png")
+    (src_dir / "show.qml").write_text("Presentation {}\n")
+
+    with pytest.raises(FileNotFoundError, match="branding.desc"):
+        calamares.check_branding_installed(src_dir)
+
+
 def test_write_branding_copies_every_file_from_src_dir(tmp_path):
     src_dir = tmp_path / "branding-src"
     src_dir.mkdir()
@@ -82,7 +157,7 @@ def test_write_branding_copies_every_file_from_src_dir(tmp_path):
     (src_dir / "1.png").write_bytes(b"fake-png")
 
     overlay_dir = tmp_path / "overlay"
-    calamares.write_branding(overlay_dir, src_dir)
+    calamares.write_branding(overlay_dir, src_dir, tmp_path / "no-lsb-release")
 
     branding_dir = overlay_dir / "etc/calamares/branding/mabox"
     assert (branding_dir / "branding.desc").read_text() == "componentName: mabox\n"
@@ -100,11 +175,29 @@ def test_write_branding_ignores_subdirectories(tmp_path):
     (src_dir / "1.png").write_bytes(b"fake-png")
 
     overlay_dir = tmp_path / "overlay"
-    calamares.write_branding(overlay_dir, src_dir)
+    calamares.write_branding(overlay_dir, src_dir, tmp_path / "no-lsb-release")
 
     branding_dir = overlay_dir / "etc/calamares/branding/mabox"
     assert (branding_dir / "1.png").exists()
     assert not (branding_dir / "nested").exists()
+
+
+def test_write_branding_renders_branding_desc_version_from_lsb_release(tmp_path):
+    src_dir = tmp_path / "branding-src"
+    src_dir.mkdir()
+    (src_dir / "branding.desc").write_text(BRANDING_DESC_FIXTURE)
+    (src_dir / "1.png").write_bytes(b"fake-png")
+    lsb = tmp_path / "lsb-release"
+    lsb.write_text(LSB_RELEASE_FIXTURE)
+
+    overlay_dir = tmp_path / "overlay"
+    calamares.write_branding(overlay_dir, src_dir, lsb)
+
+    branding_dir = overlay_dir / "etc/calamares/branding/mabox"
+    desc = (branding_dir / "branding.desc").read_text()
+    assert "versionedName:       Mabox Linux 26.08 Istredd" in desc
+    assert "1.0" not in desc
+    assert (branding_dir / "1.png").read_bytes() == b"fake-png"  # non-desc files still verbatim
 
 
 def test_build_branding_pseudo_specs_declares_parent_dirs_before_files():

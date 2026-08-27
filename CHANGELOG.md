@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- The Calamares installer's welcome screen and window title now show the
+  real Mabox release and codename (e.g. "Mabox Linux 26.08 Istredd")
+  instead of a hardcoded "1.0". The shipped `branding.desc` keeps a `1.0`
+  placeholder; `create` rewrites its `version` / `versionedName` strings
+  from the build host's `/etc/lsb-release` (`DISTRIB_RELEASE` +
+  `DISTRIB_CODENAME`) at build time -- Mabox's `/etc/os-release` carries
+  no version field at all, and Calamares' own `branding.desc` substitution
+  only reads `os-release`. Applied in both modes (reset via the overlay
+  copy, preserving via a rendered workdir copy injected as an mksquashfs
+  pseudo-file); falls back to the shipped placeholder if `/etc/lsb-release`
+  is missing the fields. `--dry-run` and `--explain` show the resolved
+  name.
+
 - `create` now checks for the packaged Calamares branding assets
   (`/usr/share/mabox-snapshot/calamares-branding/`) up front, before the
   root prompt and workdir wipe, and `doctor` reports on them too. A stale
