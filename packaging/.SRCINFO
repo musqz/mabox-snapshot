@@ -27,6 +27,14 @@ pkgbase = mabox-snapshot
 	optdepends = cryptsetup: --encrypt LUKS2-encrypted preserving-mode ISOs
 	optdepends = bash-completion: tab-completion for the mabox-snapshot CLI
 	backup = etc/mabox-snapshot/excludes.list
+	backup = etc/mabox-snapshot/images/slide-0.png
+	backup = etc/mabox-snapshot/images/slide-1.png
+	backup = etc/mabox-snapshot/images/slide-2.png
+	backup = etc/mabox-snapshot/images/slide-3.png
+	backup = etc/mabox-snapshot/images/slide-4.png
+	backup = etc/mabox-snapshot/images/slide-5.png
+	backup = etc/mabox-snapshot/images/slide-6.png
+	backup = etc/mabox-snapshot/images/slide-7.png
 	source = mabox-snapshot-0.2.7.tar.gz::https://github.com/musqz/mabox-snapshot/archive/refs/tags/v0.2.7.tar.gz
 	sha256sums = dc5b4f5de46754cc2ce6a641f5b2c436a6fd8a71aac2c49e3c4ca675b908b437
 
