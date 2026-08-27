@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.2.8
+
+- Both build modes now ship Mabox's own Calamares installer branding
+  (logo, sidebar colors, slideshow) instead of falling back to stock
+  Manjaro branding. Previously this was a builder-configurable
+  `slide-*.png` + `branding.toml` layer under
+  `/etc/mabox-snapshot/images/` that shipped with no defaults, so every
+  build silently showed Manjaro's branding unless someone configured it
+  by hand. Replaced with Mabox's real, already-proven branding assets
+  (extracted from a running Mabox VM's own `/etc/calamares/branding`)
+  as a static package asset at
+  `/usr/share/mabox-snapshot/calamares-branding/`, applied
+  unconditionally: reset mode via an overlay copy
+  (`calamares.write_branding()`), preserving mode -- which has no
+  overlay step -- via mksquashfs pseudo-files straight into the rootfs
+  layer (`calamares.build_branding_pseudo_specs()`), confirmed fixing a
+  real build where preserving-mode installs still showed Manjaro
+  branding after reset mode was already fixed.
+
 ## 0.2.7
 
 - Cleanup pass ahead of external review: removed dead code with zero
