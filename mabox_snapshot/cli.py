@@ -128,11 +128,6 @@ def _print_explain(
     plural = "s" if len(selected) > 1 else ""
     steps.append(f"Build a fresh initramfs for kernel{plural} {kernel_list}, so the ISO can boot and find its own rootfs.sfs.")
 
-    if has_splash:
-        steps.append("Resize the boot splash image for the GRUB menu.")
-    else:
-        steps.append("No custom splash image configured -- the ISO boots with GRUB's plain menu.")
-
     steps.append("Apply Mabox's own Calamares branding.")
 
     steps.append("Write BIOS and EFI boot images, so the ISO starts on both old and new-style firmware.")
@@ -150,6 +145,10 @@ def _print_explain(
     print(f"  kernels:     {kernel_list}")
     print(f"  compression: {cfg.compression}")
     print(f"  encryption:  {'LUKS2 (passphrase prompted at build time)' if cfg.encrypt else 'none'}")
+    if has_splash:
+        print(f"  splash:      splash.png, resized to {grubcfg.SPLASH_SIZE} for the grub menu")
+    else:
+        print("  splash:      none configured -- plain grub boot menu")
     print(f"  workdir:     {cfg.workdir}")
     print(f"  output:      {dest}")
     print()
