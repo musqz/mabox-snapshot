@@ -22,6 +22,12 @@ Both modes support a user-editable exclude list (`excludes add/remove/edit`), pl
 
 Arch/Manjaro-based only (Mabox itself, or any Arch derivative with the same dependencies).
 
+From Mabox repo
+```
+pacman -S mabox-snapshot
+```
+
+Or manual with makepkg
 ```sh
 git clone https://github.com/musqz/mabox-snapshot.git
 cd mabox-snapshot/packaging
