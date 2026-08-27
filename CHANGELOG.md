@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.8 (upcomming)
+## 0.2.8
 
 - Both build modes now ship Mabox's own Calamares installer branding
   (logo, sidebar colors, slideshow) instead of falling back to stock
@@ -18,7 +18,7 @@
   layer (`calamares.build_branding_pseudo_specs()`), confirmed fixing a
   real build where preserving-mode installs still showed Manjaro
   branding after reset mode was already fixed.
-  
+
 ## 0.2.7
 
 - Cleanup pass ahead of external review: removed dead code with zero
