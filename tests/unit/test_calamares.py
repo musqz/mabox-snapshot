@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from mabox_snapshot import calamares, constants
@@ -7,6 +9,18 @@ SETTINGS_CONF_FIXTURE = (
     "modules-search: [ local ]\nbranding: manjaro\nprompt-install: false\n"
     "sequence:\n- show:\n  - users\n- exec:\n  - unpackfs\n  - users\n  - services\n"
 )
+
+
+def test_repoint_branding_replaces_component():
+    result = calamares.repoint_branding("modules-search: [ local ]\nbranding: manjaro\nprompt-install: false\n")
+    assert "branding: mabox" in result
+    assert "prompt-install: false" in result
+
+
+def test_repoint_branding_does_not_touch_other_lines():
+    result = calamares.repoint_branding(SETTINGS_CONF_FIXTURE)
+    assert result.count("branding:") == 1
+    assert "- users" in result
 
 
 def test_write_settings_override_repoints_branding_line(tmp_path):
@@ -66,6 +80,24 @@ def test_write_branding_ignores_subdirectories(tmp_path):
     branding_dir = overlay_dir / "etc/calamares/branding/mabox"
     assert (branding_dir / "1.png").exists()
     assert not (branding_dir / "nested").exists()
+
+
+def test_build_branding_pseudo_specs_declares_parent_dirs_before_files():
+    specs = calamares.build_branding_pseudo_specs([Path("/work/branding/branding.desc")])
+    assert specs[0] == "etc/calamares/branding d 755 0 0"
+    assert specs[1] == "etc/calamares/branding/mabox d 755 0 0"
+    assert specs[2] == "etc/calamares/branding/mabox/branding.desc f 644 0 0 cat /work/branding/branding.desc"
+
+
+def test_build_branding_pseudo_specs_one_entry_per_file():
+    files = [Path("/work/branding/branding.desc"), Path("/work/branding/1.png"), Path("/work/branding/show.qml")]
+    specs = calamares.build_branding_pseudo_specs(files)
+    assert len(specs) == 2 + len(files)  # two dir entries + one per file
+
+
+def test_build_branding_pseudo_specs_quotes_a_path_with_spaces():
+    specs = calamares.build_branding_pseudo_specs([Path("/work dir/branding.desc")])
+    assert "'/work dir/branding.desc'" in specs[2]
 
 
 def test_build_unpackfs_conf_one_entry_per_layer():

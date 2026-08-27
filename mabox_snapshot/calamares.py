@@ -13,15 +13,20 @@ specific story).
 
 Branding is Mabox's own and static (see constants.CALAMARES_BRANDING_SRC
 -- branding.desc, show.qml, and their images, the exact assets that
-produce Mabox's real live-ISO install branding), reset-mode only (the
-"share this with someone else" mode -- preserving mode is a personal
-clone, not something that needs a welcome screen). This used to be
-builder-configurable via a slide-*.png + branding.toml pair under
-IMAGES_DIR, but this tool is Mabox-specific throughout (DEMO_USERNAME,
-MISO_BASEDIR, ISO_VOLID, ...) and nobody had actually configured one --
-one fixed identity is simpler and more stable than a template/config
-layer nobody used. Reset mode's demo account removal (see
-insert_removeuser_job()) is unconditional, independent of branding.
+produce Mabox's real live-ISO install branding), applied in both modes --
+reset mode writes it into the overlay layer (write_branding(), consumed
+by overlay.py's build_overlay()), preserving mode has no overlay step to
+write into so it goes in as mksquashfs pseudo-files straight into the
+rootfs layer instead (build_branding_pseudo_specs(), consumed by cli.py
+alongside seed.etc_skel_pseudo_specs() in the same pseudo-file list).
+This used to be builder-configurable via a slide-*.png + branding.toml
+pair under IMAGES_DIR, but this tool is Mabox-specific throughout
+(DEMO_USERNAME, MISO_BASEDIR, ISO_VOLID, ...) and nobody had actually
+configured one -- one fixed identity is simpler and more stable than a
+template/config layer nobody used. Reset mode's demo account removal
+(see insert_removeuser_job()) is reset-mode only and unconditional,
+independent of branding -- preserving mode's snapshot never ran with a
+synthetic demo account to remove.
 """
 
 from __future__ import annotations
@@ -37,12 +42,50 @@ from . import constants
 def write_branding(overlay_dir: Path, src_dir: Path = constants.CALAMARES_BRANDING_SRC) -> None:
     """Copies Mabox's static Calamares branding -- branding.desc, show.qml,
     and their slideshow/logo images -- into overlay_dir's branding
-    component, verbatim."""
+    component, verbatim. Reset mode only -- see build_branding_pseudo_specs()
+    for preserving mode's equivalent."""
     branding_dir = overlay_dir / "etc/calamares/branding" / constants.CALAMARES_BRANDING_COMPONENT
     branding_dir.mkdir(parents=True, exist_ok=True)
     for item in src_dir.iterdir():
         if item.is_file():
             shutil.copy2(item, branding_dir / item.name)
+
+
+# Not "etc/calamares/branding/mabox" itself declared as the sole dir entry
+# below -- its own parent, etc/calamares/branding, isn't a real directory
+# on a stock system either (same "Pathname does not exist in filesystem"
+# constraint as unpackfs_pseudo_specs()'s leading two dir entries), so it
+# needs its own pseudo-dir declaration too. etc/calamares itself doesn't,
+# since unpackfs_pseudo_specs() always declares that one already.
+BRANDING_TARGET_DIR = f"etc/calamares/branding/{constants.CALAMARES_BRANDING_COMPONENT}"
+
+
+def build_branding_pseudo_specs(files: list[Path]) -> list[str]:
+    """mksquashfs -p specs injecting Mabox's static Calamares branding
+    files directly into a squashed rootfs layer -- preserving mode's
+    equivalent of write_branding(), which reset mode uses instead (no
+    overlay step to write into here). files is the actual directory
+    listing of constants.CALAMARES_BRANDING_SRC, gathered by the caller
+    (see cli.py) rather than here, so this function stays pure and
+    testable without touching the real filesystem."""
+    specs = [
+        "etc/calamares/branding d 755 0 0",
+        f"{BRANDING_TARGET_DIR} d 755 0 0",
+    ]
+    for f in files:
+        specs.append(f"{BRANDING_TARGET_DIR}/{f.name} f 644 0 0 cat {shlex.quote(str(f))}")
+    return specs
+
+
+def repoint_branding(settings_text: str) -> str:
+    """Repoints settings.conf's 'branding:' line at Mabox's own component.
+    Shared by write_settings_override() (reset mode) and cli.py's
+    preserving-mode settings.conf construction -- both need it, but
+    preserving mode's settings.conf isn't built via write_settings_override()
+    (it has no overlay to write into, and doesn't want that function's
+    unconditional insert_removeuser_job() -- preserving mode never had a
+    demo account to remove)."""
+    return re.sub(r"(?m)^branding:\s*\S+", f"branding: {constants.CALAMARES_BRANDING_COMPONENT}", settings_text)
 
 
 # Target path Calamares reads settings.conf overrides from -- Calamares
@@ -105,8 +148,7 @@ def write_settings_override(overlay_dir: Path, source: Path = constants.CALAMARE
     '- removeuser' spliced into its exec sequence (see
     insert_removeuser_job() -- reset mode's only way to shed its demo
     account)."""
-    text = source.read_text()
-    text = re.sub(r"(?m)^branding:\s*\S+", f"branding: {constants.CALAMARES_BRANDING_COMPONENT}", text)
+    text = repoint_branding(source.read_text())
     text = insert_removeuser_job(text)
     dest = overlay_dir / SETTINGS_CONF_TARGET_PATH
     dest.parent.mkdir(parents=True, exist_ok=True)

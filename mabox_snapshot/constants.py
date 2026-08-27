@@ -285,9 +285,9 @@ IMAGES_DIR = Path("/etc/mabox-snapshot/images")
 # complete, safe settings.conf + module confs at CALAMARES_SETTINGS_FILE's
 # directory. This tool only ever swaps *which branding component*
 # settings.conf points at (to CALAMARES_BRANDING_COMPONENT, populated from
-# CALAMARES_BRANDING_SRC -- see calamares.py's write_branding()); the
-# install sequence itself (partition/bootloader/users/...) is never
-# touched.
+# CALAMARES_BRANDING_SRC -- reset mode via calamares.py's write_branding(),
+# preserving mode via its build_branding_pseudo_specs()); the install
+# sequence itself (partition/bootloader/users/...) is never touched.
 CALAMARES_SETTINGS_FILE = Path("/usr/share/calamares/settings.conf")
 CALAMARES_BRANDING_COMPONENT = "mabox"
 
