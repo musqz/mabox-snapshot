@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.9
 
 - `create` no longer fails when `calamares` is not installed on the build
   host. `calamares` is the live-ISO installer and is normally removed once
