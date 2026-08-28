@@ -110,6 +110,17 @@ def test_write_settings_override_always_inserts_removeuser(tmp_path):
     assert lines[users_indices[-1] + 1] == "  - removeuser"
 
 
+def test_calamares_installed_true_when_settings_conf_present(tmp_path):
+    settings = tmp_path / "settings.conf"
+    settings.write_text("branding: manjaro\n")
+
+    assert calamares.calamares_installed(settings) is True
+
+
+def test_calamares_installed_false_when_settings_conf_absent(tmp_path):
+    assert calamares.calamares_installed(tmp_path / "settings.conf") is False
+
+
 def test_check_branding_installed_passes_when_dir_has_files(tmp_path):
     src_dir = tmp_path / "calamares-branding"
     src_dir.mkdir()

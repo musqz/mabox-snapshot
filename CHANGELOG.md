@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- `create` no longer fails when `calamares` is not installed on the build
+  host. `calamares` is the live-ISO installer and is normally removed once
+  Mabox is installed to disk, so most build hosts don't have it; previously
+  `create` crashed with a bare `[Errno 2] No such file or directory:
+  '/usr/share/calamares/settings.conf'` (or `.../calamares-branding`) part
+  way through the build. It now detects the missing installer, skips every
+  Calamares branding/config step, and builds a **live-only** ISO (boots to
+  a live session, no installer), printing a clear notice in the build
+  summary / `--explain` output. `doctor` reports the same. Install
+  `calamares` first for an installable ISO. `create --encrypt` still
+  requires `calamares` and errors early without it -- an encrypted ISO
+  exists to be installed from, not booted live.
+
+- The packaged `/etc/mabox-snapshot/images/` directory (drop `splash.png`
+  here for a custom GRUB boot-menu background) is now created by the
+  package instead of only being mentioned in the man page.
+
 - The Calamares installer's welcome screen and window title now show the
   real Mabox release and codename (e.g. "Mabox Linux 26.08 Istredd")
   instead of a hardcoded "1.0". The shipped `branding.desc` keeps a `1.0`

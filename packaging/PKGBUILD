@@ -52,6 +52,12 @@ package() {
     install -Dm644 configs/excludes.list.default \
         "$pkgdir/etc/mabox-snapshot/excludes.list"
 
+    # Ship the (empty) custom-GRUB-splash drop directory so it's discoverable
+    # without reading the man page -- mabox_snapshot/cli.py looks for
+    # constants.IMAGES_DIR/splash.png (/etc/mabox-snapshot/images/splash.png)
+    # and silently falls back to a plain GRUB menu when the dir doesn't exist.
+    install -d "$pkgdir/etc/mabox-snapshot/images"
+
     # Mabox's own static Calamares reset-mode branding (see
     # mabox_snapshot/calamares.py's write_branding()) -- branding.desc,
     # show.qml, and their images, copied verbatim into every reset-mode

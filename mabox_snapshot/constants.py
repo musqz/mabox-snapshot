@@ -111,7 +111,11 @@ DEMO_GID = 1000
 DEMO_BASELINE_GROUPS = ["wheel", "audio", "video", "storage", "optical", "network"]
 
 REQUIRED_TOOLS = ["mksquashfs", "xorriso", "grub-mkimage", "mkinitcpio", "mkfs.fat", "rsync", "openssl"]
-OPTIONAL_TOOLS = ["calamares", "yay", "magick", "cryptsetup"]
+# calamares is deliberately not here: it's checked separately (by its
+# settings.conf, see calamares.calamares_installed()) because `create` decides
+# live-only-vs-installable off that same signal, and `shutil.which` could
+# drift from it on a partially-removed package.
+OPTIONAL_TOOLS = ["yay", "magick", "cryptsetup"]
 
 # ISO boot layout, modeled on Manjaro's own miso hook (verified on this host
 # at /etc/initcpio/hooks/miso -- misobasedir defaults to "manjaro" there if

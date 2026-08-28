@@ -52,6 +52,21 @@ from . import constants
 BRANDING_DESC_NAME = "branding.desc"
 
 
+def calamares_installed(settings_file: Path = constants.CALAMARES_SETTINGS_FILE) -> bool:
+    """Whether the calamares package is installed on the build host, detected
+    by its own settings.conf -- the file both build modes read and layer
+    Mabox's overrides onto (reset mode via write_settings_override(),
+    preserving mode via cli.py's pseudo-spec block).
+
+    calamares is an optdepend, not a dependency: it's the live-ISO installer,
+    normally removed once Mabox itself is installed to disk, so most build
+    hosts won't have it. When it's absent cli.py skips every Calamares
+    config/branding step and builds a live-only ISO -- one that boots to a
+    live session but carries no installer -- printing a clear notice rather
+    than failing."""
+    return settings_file.is_file()
+
+
 def check_branding_installed(src_dir: Path = constants.CALAMARES_BRANDING_SRC) -> None:
     """Both build modes apply Mabox's own Calamares branding unconditionally
     (see write_branding() / build_branding_pseudo_specs()), reading it from

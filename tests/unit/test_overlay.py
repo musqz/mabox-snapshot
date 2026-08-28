@@ -209,3 +209,22 @@ def test_build_overlay_reset_mode_populates_overlay_dir_in_order(tmp_path, monke
     overlay.build_overlay(plan)
 
     assert called == ["seed", "etc_skel", "calamares", "settings", "removeuser", "normalize", "sanitize"]
+
+
+def test_build_overlay_reset_mode_skips_calamares_when_not_installed(tmp_path, monkeypatch):
+    """No calamares on the build host -> live-only ISO: the branding,
+    settings.conf and removeuser overrides are not written, but the demo
+    home / etc-skel seeding and the sanitize pass still run."""
+    called = []
+    monkeypatch.setattr(overlay.seed, "seed_demo_home", lambda *a, **kw: called.append("seed"))
+    monkeypatch.setattr(overlay.seed, "seed_etc_skel", lambda *a, **kw: called.append("etc_skel"))
+    monkeypatch.setattr(overlay.calamares, "write_branding", lambda *a, **kw: called.append("calamares"))
+    monkeypatch.setattr(overlay.calamares, "write_settings_override", lambda *a, **kw: called.append("settings"))
+    monkeypatch.setattr(overlay.calamares, "write_removeuser_override", lambda *a, **kw: called.append("removeuser"))
+    monkeypatch.setattr(overlay.permissions, "normalize", lambda *a, **kw: called.append("normalize"))
+    monkeypatch.setattr(overlay.sanitize, "write_sanitized_files", lambda *a, **kw: called.append("sanitize"))
+
+    plan = overlay.BuildPlan(mode="reset", layers=[], overlay_dir=tmp_path / "overlay")
+    overlay.build_overlay(plan, include_calamares=False)
+
+    assert called == ["seed", "etc_skel", "normalize", "sanitize"]

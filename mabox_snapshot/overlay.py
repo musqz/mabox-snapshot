@@ -90,24 +90,28 @@ def resolve_plan(
     return BuildPlan(mode=mode, layers=[rootfs_layer, desktop_layer], overlay_dir=overlay_dir)
 
 
-def build_overlay(plan: BuildPlan) -> None:
+def build_overlay(plan: BuildPlan, include_calamares: bool = True) -> None:
     """Populates plan.overlay_dir for reset mode: the seeded demo home,
     the same skel tree seeded to etc/skel/ (so an account created later
     -- Calamares' users job during install, or a plain useradd -- gets
     Mabox's own desktop too, not the rootfs layer's bare stock skel; see
-    seed.seed_etc_skel()), Mabox's own Calamares branding, and --
-    unconditionally, independent of branding -- the removeuser override
-    that strips reset mode's demo account back out during install (see
-    calamares.py's insert_removeuser_job()). Then umask-normalized, then
-    the sanitized passwd/shadow/group/etc written last (each
-    self-chmod'd -- see sanitize.py -- so write order relative to
-    normalize() doesn't matter for their permissions)."""
+    seed.seed_etc_skel()), and -- only when include_calamares (calamares
+    is installed on the build host, see calamares.calamares_installed())
+    -- Mabox's own Calamares branding, the repointed settings.conf, and
+    the removeuser override that strips reset mode's demo account back out
+    during install (see calamares.py's insert_removeuser_job()). With no
+    calamares the ISO is live-only, so none of that installer config is
+    written. Then umask-normalized, then the sanitized
+    passwd/shadow/group/etc written last (each self-chmod'd -- see
+    sanitize.py -- so write order relative to normalize() doesn't matter
+    for their permissions)."""
     if plan.mode != "reset":
         return
     seed.seed_demo_home(plan.overlay_dir)
     seed.seed_etc_skel(plan.overlay_dir)
-    calamares.write_branding(plan.overlay_dir)
-    calamares.write_settings_override(plan.overlay_dir)
-    calamares.write_removeuser_override(plan.overlay_dir)
+    if include_calamares:
+        calamares.write_branding(plan.overlay_dir)
+        calamares.write_settings_override(plan.overlay_dir)
+        calamares.write_removeuser_override(plan.overlay_dir)
     permissions.normalize(plan.overlay_dir)
     sanitize.write_sanitized_files(plan.overlay_dir)
