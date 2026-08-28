@@ -29,6 +29,18 @@ your account.
 .B reset
 A sanitized ISO for sharing: a synthetic demo/demo account replaces the real
 user, no real /home, no saved network credentials, no machine ID.
+.PP
+.B calamares
+is the live-ISO installer and an optional dependency -- it is normally
+removed once Mabox is installed to disk. When it is not present on the
+build host,
+.B create
+skips all Calamares branding and configuration and builds a
+.I live-only
+ISO: it boots to a live session but has no installer. The build prints a
+notice when this happens; install
+.B calamares
+first for an installable ISO.
 .SH COMMANDS
 .SS version
 Print the installed version.

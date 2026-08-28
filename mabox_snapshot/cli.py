@@ -44,12 +44,28 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
         else:
             print(f"[warn] {tool} not found (optional)")
 
+    # Check calamares by the same signal `create` uses (its settings.conf, see
+    # calamares.calamares_installed()) rather than shutil.which -- the two can
+    # disagree on a partially-removed package, and it's create's behaviour that
+    # matters here.
+    calamares_ok = calamares.calamares_installed()
+    if calamares_ok:
+        print("[ok]   calamares found -- ISOs will include the installer")
+    else:
+        print("[warn] calamares not found -- ISO builds will be live-only (bootable, no installer)")
+
+    # The Mabox branding assets are shipped by this package (not calamares), so
+    # verify them regardless -- but a missing/partial dir only breaks an
+    # installable build; a live-only build never reads them.
     try:
         calamares.check_branding_installed()
         print(f"[ok]   Mabox Calamares branding present at {constants.CALAMARES_BRANDING_SRC}")
     except FileNotFoundError as e:
-        print(f"[fail] {e}")
-        ok = False
+        if calamares_ok:
+            print(f"[fail] {e}")
+            ok = False
+        else:
+            print(f"[warn] {e} -- not needed for a live-only build")
 
     usage = shutil.disk_usage(constants.DEFAULT_WORKDIR.parent if constants.DEFAULT_WORKDIR.parent.exists() else "/")
     free_gib = usage.free / (1024**3)
@@ -105,6 +121,7 @@ def _print_explain(
     dest: Path,
     has_splash: bool,
     branding_versioned_name: str | None,
+    has_calamares: bool,
 ) -> None:
     """Plain-language counterpart to the raw-command dry-run block below --
     what the build does, not the exact mksquashfs/xorriso/grub-mkimage
@@ -136,7 +153,12 @@ def _print_explain(
     plural = "s" if len(selected) > 1 else ""
     steps.append(f"Build a fresh initramfs for kernel{plural} {kernel_list}, so the ISO can boot and find its own rootfs.sfs.")
 
-    if branding_versioned_name:
+    if not has_calamares:
+        steps.append(
+            "Skip all Calamares installer config -- calamares is not installed, so this ISO "
+            "boots live but has no installer (run 'pacman -S calamares' for an installable one)."
+        )
+    elif branding_versioned_name:
         steps.append(f"Apply Mabox's own Calamares branding, labelled \"Mabox Linux {branding_versioned_name}\" (from /etc/lsb-release).")
     else:
         steps.append("Apply Mabox's own Calamares branding.")
@@ -160,6 +182,10 @@ def _print_explain(
         print(f"  splash:      splash.png, resized to {grubcfg.SPLASH_SIZE} for the grub menu")
     else:
         print("  splash:      none configured -- plain grub boot menu")
+    if has_calamares:
+        print("  calamares:   Mabox installer branding + config applied")
+    else:
+        print("  calamares:   not installed -- live-only ISO, no installer")
     print(f"  workdir:     {cfg.workdir}")
     print(f"  output:      {dest}")
     print()
@@ -172,6 +198,27 @@ def cmd_create(args: argparse.Namespace) -> int:
 
     if cfg.encrypt and args.mode == "reset":
         print("error: --encrypt is not supported with 'create reset' (reset mode only ever contains the synthetic demo account)", file=sys.stderr)
+        return 1
+
+    # calamares is an optdepend (the live-ISO installer, normally removed once
+    # Mabox is installed to disk) -- when it's absent every Calamares
+    # config/branding step below is skipped and the ISO is built live-only: it
+    # boots to a live session but has no installer. A clear notice is printed
+    # (see the summary / --explain blocks); the build itself never fails for
+    # this.
+    has_calamares = calamares.calamares_installed()
+
+    # ...except with --encrypt: an encrypted ISO exists to be *installed* onto
+    # a disk (an encrypted live-only session would just prompt for the
+    # passphrase at every boot for nothing). Refuse rather than silently hand
+    # back a non-installable encrypted ISO after prompting for a passphrase.
+    if cfg.encrypt and not has_calamares:
+        print(
+            "error: --encrypt needs calamares -- an encrypted ISO is only useful to install "
+            "from, and calamares (the installer) is not present. Install it with "
+            "'pacman -S calamares', or drop --encrypt for a plain live-only ISO",
+            file=sys.stderr,
+        )
         return 1
 
     output_dir = cfg.output_dir or cfg.workdir
@@ -273,9 +320,16 @@ def cmd_create(args: argparse.Namespace) -> int:
     # bootloader ever run, confirmed against a real install). Reset mode
     # handles its own settings.conf separately, via overlay.py's
     # write_settings_override()/write_branding().
-    settings_conf_path = cfg.workdir / "settings-preserving.conf" if args.mode == "preserving" else None
-    shellprocess_conf_path = cfg.workdir / "shellprocess-remount.conf" if cfg.encrypt else None
-    shellprocess_cleanup_conf_path = cfg.workdir / "shellprocess-cleanup.conf" if cfg.encrypt else None
+    settings_conf_path = (
+        cfg.workdir / "settings-preserving.conf" if args.mode == "preserving" and has_calamares else None
+    )
+    shellprocess_conf_path = cfg.workdir / "shellprocess-remount.conf" if cfg.encrypt and has_calamares else None
+    shellprocess_cleanup_conf_path = (
+        cfg.workdir / "shellprocess-cleanup.conf" if cfg.encrypt and has_calamares else None
+    )
+    # None on a live-only build (no calamares) -- none of these
+    # /etc/calamares/modules/*.conf overrides has a reader on the ISO then, so
+    # they're simply not injected.
     unpackfs_pseudo = calamares.unpackfs_pseudo_specs(
         unpackfs_conf_path,
         initcpio_override_path,
@@ -285,7 +339,7 @@ def cmd_create(args: argparse.Namespace) -> int:
         settings_conf_path=settings_conf_path,
         shellprocess_conf_path=shellprocess_conf_path,
         shellprocess_cleanup_conf_path=shellprocess_cleanup_conf_path,
-    )
+    ) if has_calamares else None
     # etc/skel seeding for preserving mode -- mirrors seed.seed_etc_skel()'s
     # reset-mode overlay copy, but injected via mksquashfs pseudo-files
     # since preserving mode has no overlay step to write into. ~1000
@@ -302,22 +356,25 @@ def cmd_create(args: argparse.Namespace) -> int:
     # sitting at one of these paths (e.g. a hand-placed admin workaround)
     # would silently win over our pseudo-file -- verified empirically,
     # mksquashfs just warns and keeps whatever's already in the source tree.
-    plan.layers[0].exclude_patterns.append(calamares.UNPACKFS_CONF_PATH)
-    plan.layers[0].exclude_patterns.append(calamares.INITCPIO_CONF_TARGET_PATH)
-    plan.layers[0].exclude_patterns.append(calamares.SERVICES_CONF_TARGET_PATH)
-    plan.layers[0].exclude_patterns.append(calamares.GRUBCFG_CONF_TARGET_PATH)
+    if has_calamares:
+        plan.layers[0].exclude_patterns.append(calamares.UNPACKFS_CONF_PATH)
+        plan.layers[0].exclude_patterns.append(calamares.INITCPIO_CONF_TARGET_PATH)
+        plan.layers[0].exclude_patterns.append(calamares.SERVICES_CONF_TARGET_PATH)
+        plan.layers[0].exclude_patterns.append(calamares.GRUBCFG_CONF_TARGET_PATH)
     if args.mode == "preserving":
-        plan.layers[0].exclude_patterns.append(calamares.SETTINGS_CONF_TARGET_PATH)
         # Without this, the build host's own real /etc/skel (which can be
         # arbitrarily messy -- confirmed on a real dev host, personal app
         # config had ended up copied there) would win over our pseudo-file
-        # injection for anything not explicitly covered by it.
+        # injection for anything not explicitly covered by it. Unconditional:
+        # etc/skel seeding happens on every preserving build, calamares or not.
         plan.layers[0].exclude_patterns.append("etc/skel/*")
-        # Same reasoning, for Mabox's branding component (see
-        # calamares.build_branding_pseudo_specs()) -- unlikely to already
-        # exist on a stock system, but not something to leave to chance.
-        plan.layers[0].exclude_patterns.append(f"{calamares.BRANDING_TARGET_DIR}/*")
-    if cfg.encrypt:
+        if has_calamares:
+            plan.layers[0].exclude_patterns.append(calamares.SETTINGS_CONF_TARGET_PATH)
+            # Same reasoning as etc/skel/*, for Mabox's branding component (see
+            # calamares.build_branding_pseudo_specs()) -- unlikely to already
+            # exist on a stock system, but not something to leave to chance.
+            plan.layers[0].exclude_patterns.append(f"{calamares.BRANDING_TARGET_DIR}/*")
+    if cfg.encrypt and has_calamares:
         plan.layers[0].exclude_patterns.append(calamares.SHELLPROCESS_CONF_TARGET_PATH)
         plan.layers[0].exclude_patterns.append(calamares.SHELLPROCESS_CLEANUP_CONF_TARGET_PATH)
 
@@ -375,7 +432,7 @@ def cmd_create(args: argparse.Namespace) -> int:
     xorriso_cmd = isobuild.build_xorriso_command(iso_root, dest, constants.ISO_VOLID)
 
     if args.explain:
-        _print_explain(args, cfg, plan, profile, selected, kvers, dest, has_splash, branding_versioned_name)
+        _print_explain(args, cfg, plan, profile, selected, kvers, dest, has_splash, branding_versioned_name, has_calamares)
     else:
         print(f"mode:        {plan.mode}")
         print(f"profile:     {profile.name}")
@@ -396,15 +453,19 @@ def cmd_create(args: argparse.Namespace) -> int:
             print(f"splash:      {' '.join(str(c) for c in splash_cmd)}")
         else:
             print(f"splash:      none configured ({splash_source} not found) -- plain grub boot menu")
-        branding_label = (
-            f"Mabox Linux {branding_versioned_name}" if branding_versioned_name
-            else 'shipped placeholder "1.0" (no DISTRIB_RELEASE/DISTRIB_CODENAME in /etc/lsb-release)'
-        )
-        print(f"calamares:   Mabox branding, {branding_label} ({constants.CALAMARES_BRANDING_SRC})")
-        if cfg.encrypt:
-            print(f"unpackfs:    {', '.join(layer.name for layer in plan.layers)} -> {unpackfs_conf_path} (rootfs sourced from live decrypted mount, remounted by an injected Calamares job right before unpackfs runs and closed again right after)")
+        if has_calamares:
+            branding_label = (
+                f"Mabox Linux {branding_versioned_name}" if branding_versioned_name
+                else 'shipped placeholder "1.0" (no DISTRIB_RELEASE/DISTRIB_CODENAME in /etc/lsb-release)'
+            )
+            print(f"calamares:   Mabox branding, {branding_label} ({constants.CALAMARES_BRANDING_SRC})")
+            if cfg.encrypt:
+                print(f"unpackfs:    {', '.join(layer.name for layer in plan.layers)} -> {unpackfs_conf_path} (rootfs sourced from live decrypted mount, remounted by an injected Calamares job right before unpackfs runs and closed again right after)")
+            else:
+                print(f"unpackfs:    {', '.join(layer.name for layer in plan.layers)} -> {unpackfs_conf_path}")
         else:
-            print(f"unpackfs:    {', '.join(layer.name for layer in plan.layers)} -> {unpackfs_conf_path}")
+            print("calamares:   not installed -- ISO will boot live but has no installer")
+            print("             (for an installable ISO, cancel and run: pacman -S calamares)")
         print(f"bios boot:   {' '.join(str(c) for c in bios_cmd)}")
         print(f"efi boot:    {' '.join(str(c) for c in efi_cmd)}")
         print(f"assemble:    {' '.join(str(c) for c in xorriso_cmd)}")
@@ -430,8 +491,10 @@ def cmd_create(args: argparse.Namespace) -> int:
         # Both modes read this later (overlay.build_overlay() for reset,
         # the pseudo-spec block for preserving) -- check it here, before the
         # workdir wipe, so a stale/partial install fails with an actionable
-        # message instead of a bare '[Errno 2]' mid-build.
-        calamares.check_branding_installed()
+        # message instead of a bare '[Errno 2]' mid-build. Skipped on a
+        # live-only build: no calamares means no branding step to feed.
+        if has_calamares:
+            calamares.check_branding_installed()
     except FileNotFoundError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
@@ -512,24 +575,24 @@ def cmd_create(args: argparse.Namespace) -> int:
         print(f"warning: change notification skipped: {e}", file=sys.stderr)
 
     try:
-        overlay.build_overlay(plan)  # no-op for preserving mode
+        overlay.build_overlay(plan, include_calamares=has_calamares)  # no-op for preserving mode
     except FileNotFoundError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
 
-    unpackfs_conf_path.write_text(
-        calamares.build_unpackfs_conf([layer.name for layer in plan.layers], encrypt=cfg.encrypt)
-    )
-    initcpio_override_path.write_text(calamares.INITCPIO_CONF_OVERRIDE)
-    services_override_path.write_text(calamares.SERVICES_CONF_OVERRIDE)
-    grubcfg_override_path.write_text(calamares.GRUBCFG_CONF_OVERRIDE)
+    if has_calamares:
+        unpackfs_conf_path.write_text(
+            calamares.build_unpackfs_conf([layer.name for layer in plan.layers], encrypt=cfg.encrypt)
+        )
+        initcpio_override_path.write_text(calamares.INITCPIO_CONF_OVERRIDE)
+        services_override_path.write_text(calamares.SERVICES_CONF_OVERRIDE)
+        grubcfg_override_path.write_text(calamares.GRUBCFG_CONF_OVERRIDE)
     if args.mode == "preserving":
-        # calamares.CALAMARES_SETTINGS_FILE (missing if calamares itself
-        # isn't installed -- it's OPTIONAL_TOOLS, only warned about by
-        # `doctor`, never required), constants.CALAMARES_BRANDING_SRC
-        # (missing if mabox-snapshot itself isn't properly installed via
-        # its package), and seed.etc_skel_pseudo_specs() (missing vendored
-        # mabox-skel) can all raise here; remove_users_step() can also
+        # constants.CALAMARES_BRANDING_SRC (missing if mabox-snapshot itself
+        # isn't properly installed via its package) and
+        # seed.etc_skel_pseudo_specs() (missing vendored mabox-skel) can
+        # raise here; calamares.CALAMARES_SETTINGS_FILE can't -- has_calamares
+        # already confirmed it exists -- but remove_users_step() can still
         # raise ValueError if its anchor line is ever missing. Same
         # catch-and-report pattern as overlay.build_overlay() above -- by
         # this point the build has already required root and wiped the
@@ -537,32 +600,34 @@ def cmd_create(args: argparse.Namespace) -> int:
         # experience than the same "error: ...; return 1" every other
         # failure in this function already gets.
         try:
-            settings_text = calamares.repoint_branding(constants.CALAMARES_SETTINGS_FILE.read_text())
-            settings_text = calamares.remove_users_step(settings_text)
-            if cfg.encrypt:
-                settings_text = calamares.insert_live_source_job(settings_text)
-            settings_conf_path.write_text(settings_text)
-            branding_files = sorted(p for p in constants.CALAMARES_BRANDING_SRC.iterdir() if p.is_file())
-            # branding.desc goes in with its "1.0" placeholder version strings
-            # rewritten from this build host's /etc/lsb-release (see
-            # calamares.render_branding_desc()) -- rendered into a workdir copy
-            # here, since preserving mode has no overlay step to write into, and
-            # swapped in for the vendored source file under its own filename so
-            # build_branding_pseudo_specs()'s target path is unchanged.
-            branding_desc_path = cfg.workdir / calamares.BRANDING_DESC_NAME
-            branding_desc_path.write_text(
-                calamares.render_branding_desc(
-                    (constants.CALAMARES_BRANDING_SRC / calamares.BRANDING_DESC_NAME).read_text(),
-                    constants.LSB_RELEASE_FILE.read_text() if constants.LSB_RELEASE_FILE.exists() else "",
+            pseudo_specs = seed.etc_skel_pseudo_specs()
+            if has_calamares:
+                settings_text = calamares.repoint_branding(constants.CALAMARES_SETTINGS_FILE.read_text())
+                settings_text = calamares.remove_users_step(settings_text)
+                if cfg.encrypt:
+                    settings_text = calamares.insert_live_source_job(settings_text)
+                settings_conf_path.write_text(settings_text)
+                branding_files = sorted(p for p in constants.CALAMARES_BRANDING_SRC.iterdir() if p.is_file())
+                # branding.desc goes in with its "1.0" placeholder version strings
+                # rewritten from this build host's /etc/lsb-release (see
+                # calamares.render_branding_desc()) -- rendered into a workdir copy
+                # here, since preserving mode has no overlay step to write into, and
+                # swapped in for the vendored source file under its own filename so
+                # build_branding_pseudo_specs()'s target path is unchanged.
+                branding_desc_path = cfg.workdir / calamares.BRANDING_DESC_NAME
+                branding_desc_path.write_text(
+                    calamares.render_branding_desc(
+                        (constants.CALAMARES_BRANDING_SRC / calamares.BRANDING_DESC_NAME).read_text(),
+                        constants.LSB_RELEASE_FILE.read_text() if constants.LSB_RELEASE_FILE.exists() else "",
+                    )
                 )
-            )
-            branding_files = [branding_desc_path if p.name == calamares.BRANDING_DESC_NAME else p for p in branding_files]
-            pseudo_specs = seed.etc_skel_pseudo_specs() + calamares.build_branding_pseudo_specs(branding_files)
+                branding_files = [branding_desc_path if p.name == calamares.BRANDING_DESC_NAME else p for p in branding_files]
+                pseudo_specs += calamares.build_branding_pseudo_specs(branding_files)
             skel_pseudo_file_path.write_text("\n".join(pseudo_specs) + "\n")
         except (FileNotFoundError, ValueError) as e:
             print(f"error: {e}", file=sys.stderr)
             return 1
-    if cfg.encrypt:
+    if cfg.encrypt and has_calamares:
         shellprocess_conf_path.write_text(calamares.build_shellprocess_remount_conf())
         shellprocess_cleanup_conf_path.write_text(calamares.build_shellprocess_cleanup_conf())
 
