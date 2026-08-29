@@ -7,7 +7,7 @@
 
 Snapshot a running [Mabox Linux](https://maboxlinux.org/mabox-26-08-and-new-tools-for-system-remastering/) system into a bootable live/install ISO. Mabox-only, Python, CLI-only — modeled on MX Linux's `mx-snapshot`, not a port of it.
 
-<img width="929" height="748" alt="Image" src="https://github.com/user-attachments/assets/6c619d67-fcab-4c2c-a03d-af2bc16796ba" />
+<img width="1267" height="713" alt="Image" src="https://github.com/user-attachments/assets/06cf1b7b-153d-413f-9a01-6ecaf7c713bd" />
 
 ## Two modes
 
