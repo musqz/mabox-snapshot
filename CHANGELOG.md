@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- The live ISO's GRUB menu now ends with a **"safe graphics (nomodeset)"**
+  entry: the newest kernel booted with `nomodeset` and without `quiet`, so
+  it stays visible if it fails. It rescues machines that show a black or
+  garbled screen on the normal entry (older Intel/NVIDIA laptops, some
+  hybrid-graphics setups) -- the same fallback every mainstream distro ISO
+  ships. Purely additive: `set default=0` still selects the normal boot.
+
 ## 0.2.9
 
 - `create` no longer fails when `calamares` is not installed on the build

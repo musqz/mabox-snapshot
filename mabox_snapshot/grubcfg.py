@@ -6,6 +6,11 @@ installed system, only /usr/share/grub's fonts and a background image
 are). Generated directly instead: plain text, one menu entry per selected
 kernel, booting straight from the ISO9660 filesystem via the miso hook
 (misobasedir=/misolabel= on the kernel cmdline -- see constants.py).
+
+A final "safe graphics" entry is always appended: the newest kernel with
+KMS disabled (nomodeset), for machines that show a black or garbled screen
+on the normal entry. `quiet` is dropped there so a later failure stays
+visible. Same rationale as every mainstream distro ISO shipping one.
 """
 
 from __future__ import annotations
@@ -34,11 +39,11 @@ def normalize_splash(source: Path, dest: Path, size: str = SPLASH_SIZE) -> None:
     subprocess.run(build_splash_command(source, dest, size), check=True)
 
 
-def _menu_entry(kernel_name: str, misolabel: str) -> str:
+def _menu_entry(kernel_name: str, misolabel: str, title: str, params: str) -> str:
     return (
-        f'menuentry "Mabox Linux (live) -- {kernel_name}" {{\n'
+        f'menuentry "{title}" {{\n'
         f"    linux /boot/vmlinuz-{kernel_name} "
-        f"misobasedir={constants.MISO_BASEDIR} misolabel={misolabel} quiet\n"
+        f"misobasedir={constants.MISO_BASEDIR} misolabel={misolabel} {params}\n"
         f"    initrd /boot/initramfs-{kernel_name}.img\n"
         f"}}\n"
     )
@@ -60,5 +65,16 @@ def build_grub_cfg(kernel_names: list[str], misolabel: str = constants.ISO_VOLID
     if has_splash:
         lines += ["insmod png", "background_image /boot/grub/splash.png"]
     lines.append("")
-    lines += [_menu_entry(name, misolabel) for name in kernel_names]
+    lines += [
+        _menu_entry(name, misolabel, f"Mabox Linux (live) -- {name}", "quiet")
+        for name in kernel_names
+    ]
+    lines.append(
+        _menu_entry(
+            kernel_names[0],
+            misolabel,
+            "Mabox Linux (live) -- safe graphics (nomodeset)",
+            "nomodeset",
+        )
+    )
     return "\n".join(lines) + "\n"

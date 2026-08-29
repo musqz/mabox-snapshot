@@ -41,6 +41,13 @@ ISO: it boots to a live session but has no installer. The build prints a
 notice when this happens; install
 .B calamares
 first for an installable ISO.
+.PP
+The generated GRUB menu has one entry per included kernel plus a final
+.I "safe graphics (nomodeset)"
+entry (newest kernel, KMS disabled, no
+.BR quiet ),
+for hardware that shows a black or garbled screen on the normal entry.
+The normal entry stays the default.
 .SH COMMANDS
 .SS version
 Print the installed version.
