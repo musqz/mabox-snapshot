@@ -5,12 +5,28 @@ import pytest
 from mabox_snapshot import grubcfg
 
 
-def test_build_grub_cfg_one_entry_per_kernel():
+def test_build_grub_cfg_one_entry_per_kernel_plus_safe_graphics():
     cfg = grubcfg.build_grub_cfg(["linux612", "linux618"], misolabel="TESTLABEL")
 
-    assert cfg.count("menuentry") == 2
+    # two kernels + one appended safe-graphics entry
+    assert cfg.count("menuentry") == 3
     assert "linux /boot/vmlinuz-linux612 misobasedir=mabox misolabel=TESTLABEL quiet" in cfg
     assert "initrd /boot/initramfs-linux618.img" in cfg
+
+
+def test_build_grub_cfg_appends_safe_graphics_entry_last():
+    cfg = grubcfg.build_grub_cfg(["linux618", "linux612"], misolabel="TESTLABEL")
+
+    assert cfg.count("safe graphics (nomodeset)") == 1
+    # uses the first (newest) kernel, drops `quiet`, adds `nomodeset`
+    assert "linux /boot/vmlinuz-linux618 misobasedir=mabox misolabel=TESTLABEL nomodeset" in cfg
+    assert cfg.rfind("nomodeset") > cfg.rfind('"Mabox Linux (live) -- linux612"')
+
+
+def test_build_grub_cfg_default_entry_is_not_the_safe_graphics_one():
+    cfg = grubcfg.build_grub_cfg(["linux618"])
+    assert "set default=0" in cfg
+    assert cfg.index('"Mabox Linux (live) -- linux618"') < cfg.index("nomodeset")
 
 
 def test_build_grub_cfg_requires_at_least_one_kernel():
