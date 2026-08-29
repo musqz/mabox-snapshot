@@ -7,6 +7,8 @@
 
 Snapshot a running [Mabox Linux](https://maboxlinux.org/mabox-26-08-and-new-tools-for-system-remastering/) system into a bootable live/install ISO. Mabox-only, Python, CLI-only — modeled on MX Linux's `mx-snapshot`, not a port of it.
 
+<img width="929" height="748" alt="Image" src="https://github.com/user-attachments/assets/6c619d67-fcab-4c2c-a03d-af2bc16796ba" />
+
 ## Two modes
 
 - **`preserving`** — a full personal clone: real `/home`, real accounts, real passwords. For migrating to new hardware or backing up your own machine. Not for sharing. Optionally LUKS2-encrypted (`--encrypt`). Calamares' own account-creation step is skipped — the snapshot already *is* your account.
