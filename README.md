@@ -5,7 +5,7 @@
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Mabox%20Linux-2f4f4f.svg)
 
-Snapshot a running [Mabox Linux](https://maboxlinux.org/) system into a bootable live/install ISO. Mabox-only, Python, CLI-only — modeled on MX Linux's `mx-snapshot`, not a port of it.
+Snapshot a running [Mabox Linux]([https://maboxlinux.org/](https://maboxlinux.org/mabox-26-08-and-new-tools-for-system-remastering/)) system into a bootable live/install ISO. Mabox-only, Python, CLI-only — modeled on MX Linux's `mx-snapshot`, not a port of it.
 
 ## Two modes
 
