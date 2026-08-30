@@ -42,12 +42,24 @@ notice when this happens; install
 .B calamares
 first for an installable ISO.
 .PP
-The generated GRUB menu has one entry per included kernel plus a final
+The generated GRUB menu has one entry per included kernel plus a
 .I "safe graphics (nomodeset)"
 entry (newest kernel, KMS disabled, no
 .BR quiet ),
 for hardware that shows a black or garbled screen on the normal entry.
 The normal entry stays the default.
+.PP
+If the build host has
+.B memtest86+
+installed, a
+.I "memory test (memtest86+)"
+entry is added as well. It is shown only on the firmware that can run it:
+BIOS boots the
+.B memtest86+
+image directly, UEFI chainloads the
+.B memtest86+-efi
+image (a separate package; being unsigned, it needs Secure Boot disabled).
+When neither package is installed the entry is simply omitted.
 .SH COMMANDS
 .SS version
 Print the installed version.

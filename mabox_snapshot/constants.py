@@ -136,6 +136,15 @@ GRUB_LIB_DIR = Path("/usr/lib/grub")
 # uses, rendering as placeholder boxes instead of a clean border.
 GRUB_UNICODE_FONT = Path("/usr/share/grub/unicode.pf2")
 
+# memtest86+ ships a standalone memory-test image that GRUB loads directly
+# (no kernel/initramfs). The base `memtest86+` package provides only the
+# BIOS .bin; the separate `memtest86+-efi` package provides the UEFI .efi.
+# Both are optional build-host deps: `create` copies whichever are present
+# into the ISO's /boot/memtest86+/ and grubcfg emits a matching
+# ${grub_platform}-guarded entry (paths hardcoded there, as with vmlinuz).
+MEMTEST_BIOS_SRC = Path("/boot/memtest86+/memtest.bin")
+MEMTEST_EFI_SRC = Path("/boot/memtest86+/memtest.efi")
+
 # Verified at /usr/share/manjaro-tools/mkinitcpio.conf (manjaro-tools-iso-git
 # package) -- the exact HOOKS/MODULES a live ISO's initramfs needs for the
 # miso boot hook to run, except "miso" itself is replaced with "miso_boot"

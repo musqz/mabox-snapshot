@@ -34,7 +34,7 @@ cd mabox-snapshot/packaging
 makepkg -si
 ```
 
-Runtime dependencies (`squashfs-tools`, `grub`, `mkinitcpio`, `libisoburn`, `dosfstools`, `rsync`, `openssl`) are pulled in automatically. `calamares` is an optional dependency — only needed if the produced ISO will be installed *from*, not just booted live. It's the live-ISO installer and is normally removed once Mabox is installed to disk, so most build hosts won't have it: `create` then builds a **live-only** ISO (boots to a live session, no installer) and says so — install `calamares` first for an installable ISO. `cryptsetup` is optional too, needed only for `--encrypt` builds.
+Runtime dependencies (`squashfs-tools`, `grub`, `mkinitcpio`, `libisoburn`, `dosfstools`, `rsync`, `openssl`) are pulled in automatically. `calamares` is an optional dependency — only needed if the produced ISO will be installed *from*, not just booted live. It's the live-ISO installer and is normally removed once Mabox is installed to disk, so most build hosts won't have it: `create` then builds a **live-only** ISO (boots to a live session, no installer) and says so — install `calamares` first for an installable ISO. `cryptsetup` is optional too, needed only for `--encrypt` builds. Install `memtest86+` (and `memtest86+-efi` for UEFI) to get a memory-test entry in the live ISO's boot menu; without them the entry is simply left out.
 
 ## Quick start
 
