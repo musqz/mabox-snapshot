@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
 
 - The live ISO's GRUB menu now ends with a **"safe graphics (nomodeset)"**
   entry: the newest kernel booted with `nomodeset` and without `quiet`, so
