@@ -44,6 +44,15 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
         else:
             print(f"[warn] {tool} not found (optional)")
 
+    memtest_modes = [
+        mode for mode, src in (("BIOS", constants.MEMTEST_BIOS_SRC), ("UEFI", constants.MEMTEST_EFI_SRC))
+        if src.exists()
+    ]
+    if memtest_modes:
+        print(f"[ok]   memtest86+ found ({'+'.join(memtest_modes)}) -- live ISO will include a memory-test entry")
+    else:
+        print("[warn] memtest86+ not found (optional) -- no memory-test entry in the live ISO boot menu")
+
     # Check calamares by the same signal `create` uses (its settings.conf, see
     # calamares.calamares_installed()) rather than shutil.which -- the two can
     # disagree on a partially-removed package, and it's create's behaviour that
@@ -122,6 +131,8 @@ def _print_explain(
     has_splash: bool,
     branding_versioned_name: str | None,
     has_calamares: bool,
+    memtest_bios: bool,
+    memtest_efi: bool,
 ) -> None:
     """Plain-language counterpart to the raw-command dry-run block below --
     what the build does, not the exact mksquashfs/xorriso/grub-mkimage
@@ -182,6 +193,11 @@ def _print_explain(
         print(f"  splash:      splash.png, resized to {grubcfg.SPLASH_SIZE} for the grub menu")
     else:
         print("  splash:      none configured -- plain grub boot menu")
+    if memtest_bios or memtest_efi:
+        modes = "+".join(m for m, on in (("BIOS", memtest_bios), ("UEFI", memtest_efi)) if on)
+        print(f"  memtest:     memtest86+ memory-test boot entry ({modes})")
+    else:
+        print("  memtest:     memtest86+ not installed -- no memory-test boot entry")
     if has_calamares:
         print("  calamares:   Mabox installer branding + config applied")
     else:
@@ -403,6 +419,12 @@ def cmd_create(args: argparse.Namespace) -> int:
     has_splash = splash_source.exists()
     splash_dest = iso_root / "boot" / "grub" / "splash.png"
 
+    # memtest86+ (BIOS .bin) and memtest86+-efi (UEFI .efi) are independent
+    # optional build-host packages -- copy whichever are present and let
+    # grubcfg emit the matching guarded entry.
+    memtest_bios = constants.MEMTEST_BIOS_SRC.exists()
+    memtest_efi = constants.MEMTEST_EFI_SRC.exists()
+
     # Baked into the Calamares branding.desc at build time (see
     # calamares.render_branding_desc()); None if this host's /etc/lsb-release
     # lacks the release/codename, in which case branding.desc keeps its
@@ -432,7 +454,7 @@ def cmd_create(args: argparse.Namespace) -> int:
     xorriso_cmd = isobuild.build_xorriso_command(iso_root, dest, constants.ISO_VOLID)
 
     if args.explain:
-        _print_explain(args, cfg, plan, profile, selected, kvers, dest, has_splash, branding_versioned_name, has_calamares)
+        _print_explain(args, cfg, plan, profile, selected, kvers, dest, has_splash, branding_versioned_name, has_calamares, memtest_bios, memtest_efi)
     else:
         print(f"mode:        {plan.mode}")
         print(f"profile:     {profile.name}")
@@ -453,6 +475,14 @@ def cmd_create(args: argparse.Namespace) -> int:
             print(f"splash:      {' '.join(str(c) for c in splash_cmd)}")
         else:
             print(f"splash:      none configured ({splash_source} not found) -- plain grub boot menu")
+        if memtest_bios or memtest_efi:
+            srcs = [
+                str(s) for s, on in
+                ((constants.MEMTEST_BIOS_SRC, memtest_bios), (constants.MEMTEST_EFI_SRC, memtest_efi)) if on
+            ]
+            print(f"memtest:     {', '.join(srcs)} -> boot/memtest86+/ (guarded grub entry)")
+        else:
+            print("memtest:     none -- memtest86+ not installed on the build host")
         if has_calamares:
             branding_label = (
                 f"Mabox Linux {branding_versioned_name}" if branding_versioned_name
@@ -655,12 +685,28 @@ def cmd_create(args: argparse.Namespace) -> int:
     if has_splash:
         grubcfg.normalize_splash(splash_source, splash_dest)
 
+    if memtest_bios or memtest_efi:
+        memtest_dir = iso_root / "boot" / "memtest86+"
+        memtest_dir.mkdir(parents=True, exist_ok=True)
+        if memtest_bios:
+            shutil.copy2(constants.MEMTEST_BIOS_SRC, memtest_dir / "memtest.bin")
+        if memtest_efi:
+            shutil.copy2(constants.MEMTEST_EFI_SRC, memtest_dir / "memtest.efi")
+
     grub_cfg_dest = iso_root / "boot" / "grub" / "grub.cfg"
     grub_cfg_dest.parent.mkdir(parents=True, exist_ok=True)
     # detect_installed_kernels() sorts oldest-first; reverse so grub's default
     # entry (index 0, see grubcfg.build_grub_cfg) boots the newest kernel.
     menu_kernel_names = [k.name for k in reversed(selected)]
-    grub_cfg_dest.write_text(grubcfg.build_grub_cfg(menu_kernel_names, constants.ISO_VOLID, has_splash=has_splash))
+    grub_cfg_dest.write_text(
+        grubcfg.build_grub_cfg(
+            menu_kernel_names,
+            constants.ISO_VOLID,
+            has_splash=has_splash,
+            memtest_bios=memtest_bios,
+            memtest_efi=memtest_efi,
+        )
+    )
 
     isobuild.prepare_bios_boot(iso_root)
     isobuild.prepare_efi_boot(iso_root, cfg.workdir)

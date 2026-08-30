@@ -34,6 +34,42 @@ def test_build_grub_cfg_requires_at_least_one_kernel():
         grubcfg.build_grub_cfg([])
 
 
+def test_build_grub_cfg_omits_memtest_by_default():
+    cfg = grubcfg.build_grub_cfg(["linux618", "linux612"])
+    assert "memtest" not in cfg
+    # two kernels + one safe-graphics entry, nothing more
+    assert cfg.count("menuentry") == 3
+
+
+def test_build_grub_cfg_bios_memtest_entry_is_pc_guarded():
+    cfg = grubcfg.build_grub_cfg(["linux618"], memtest_bios=True)
+    assert 'menuentry "Mabox Linux (live) -- memory test (memtest86+)"' in cfg
+    assert 'if [ "${grub_platform}" = "pc" ]; then' in cfg
+    assert "linux16 /boot/memtest86+/memtest.bin" in cfg
+    assert "chainloader" not in cfg
+
+
+def test_build_grub_cfg_efi_memtest_entry_is_efi_guarded():
+    cfg = grubcfg.build_grub_cfg(["linux618"], memtest_efi=True)
+    assert 'if [ "${grub_platform}" = "efi" ]; then' in cfg
+    assert "chainloader /boot/memtest86+/memtest.efi" in cfg
+    assert "linux16" not in cfg
+
+
+def test_build_grub_cfg_both_memtest_images_emit_two_guarded_blocks():
+    cfg = grubcfg.build_grub_cfg(["linux618"], memtest_bios=True, memtest_efi=True)
+    assert cfg.count('menuentry "Mabox Linux (live) -- memory test (memtest86+)"') == 2
+    assert cfg.count("if [ ") == 2
+    assert cfg.count("}\nfi\n") == 2
+    # memtest is self-contained -- no live-rootfs cmdline on those entries
+    assert "misobasedir" not in cfg.split("memory test", 1)[1]
+
+
+def test_build_grub_cfg_memtest_entries_come_after_safe_graphics():
+    cfg = grubcfg.build_grub_cfg(["linux618"], memtest_bios=True, memtest_efi=True)
+    assert cfg.rfind("nomodeset") < cfg.find("memtest86+")
+
+
 def test_build_grub_cfg_omits_background_by_default():
     cfg = grubcfg.build_grub_cfg(["linux618"])
     assert "background_image" not in cfg

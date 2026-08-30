@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- The live ISO's GRUB menu gains a **"memory test (memtest86+)"** entry
+  when the build host has `memtest86+` installed. memtest is a standalone
+  image, not a kernel, so BIOS loads it with `linux16` and UEFI chainloads
+  the `memtest86+-efi` build; each entry is wrapped in a `${grub_platform}`
+  guard so a machine only ever sees the one it can boot. The UEFI image is
+  unsigned and needs Secure Boot disabled. `memtest86+` and `memtest86+-efi`
+  are optional build-host packages -- when neither is present the entry is
+  omitted and the build still succeeds. `doctor` reports what it finds.
+
 ## 0.3.0
 
 - The live ISO's GRUB menu now ends with a **"safe graphics (nomodeset)"**
