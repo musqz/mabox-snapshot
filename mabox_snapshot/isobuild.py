@@ -6,10 +6,13 @@ single-rootfs personal-snapshot tool: GPG signing, snap seeding, the
 desktopfs/mhwdfs multi-layer split, and grubenv's menu_show_once
 persistence flag.
 
-The FAT efi.img is built with a plain `mount -o loop` (auto-managed loop
-device) rather than manjaro-tools' manual losetup/track_img bookkeeping --
-that bookkeeping exists there to support several concurrently-mounted
-images; this tool only ever builds one.
+The FAT efi.img is populated with mtools (mmd/mcopy) rather than a loop
+mount -- the same way archiso's mkarchiso builds its efiboot.img. A
+`mount -o loop` needs root, the `loop` kernel module loaded, and a free
+loop device; on a host updated to a new kernel without a reboot, or one
+that has run out of loop devices, it fails with an opaque "failed to set
+up loop device". mtools writes into the image directly and needs none of
+that.
 """
 
 from __future__ import annotations
@@ -118,27 +121,33 @@ def build_efi_boot_command(grub_efi_dir: Path, dest: Path) -> list[str]:
     ]
 
 
+def build_mtools_mmd_command(image: Path, dir_paths: list[str]) -> list[str]:
+    """mmd creates each directory in the order given, so pass parents
+    before children (e.g. ["efi", "efi/boot"])."""
+    return ["mmd", "-i", str(image), *(f"::{p}" for p in dir_paths)]
+
+
+def build_mtools_mcopy_command(image: Path, source_file: Path, arcname: str) -> list[str]:
+    return ["mcopy", "-i", str(image), str(source_file), f"::{arcname}"]
+
+
 def _build_fat_image(dest: Path, source_file: Path, arcname: str, size_bytes: int) -> None:
     dest.write_bytes(b"\0" * size_bytes)
     subprocess.run(["mkfs.fat", "-n", "MISO_EFI", str(dest)], check=True, capture_output=True)
 
-    mnt = dest.parent / f".{dest.name}.mnt"
-    mnt.mkdir(exist_ok=True)
-    subprocess.run(["mount", "-o", "loop", str(dest), str(mnt)], check=True)
-    try:
-        target = mnt / arcname
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source_file, target)
-    finally:
-        subprocess.run(["umount", str(mnt)], check=True)
-        mnt.rmdir()
+    segments = arcname.strip("/").split("/")
+    parent_dirs = ["/".join(segments[:i]) for i in range(1, len(segments))]
+    if parent_dirs:
+        subprocess.run(build_mtools_mmd_command(dest, parent_dirs), check=True, capture_output=True)
+    subprocess.run(build_mtools_mcopy_command(dest, source_file, arcname), check=True, capture_output=True)
 
 
 def prepare_efi_boot(iso_root: Path, work_dir: Path, efi_img_size: int = 4 * 1024 * 1024) -> None:
     """Builds bootx64.efi, drops a plain copy at iso_root/efi/boot/ (for
     firmware that boots the ISO9660 tree directly), and builds the
     FAT-formatted efi.img that assemble()'s xorriso call appends as a raw
-    partition. Needs root: mkfs.fat + a loop mount."""
+    partition. The efi.img is populated with mtools, so this step needs no
+    loop device (the overall create still needs root, for mksquashfs)."""
     efi_src = work_dir / "grub-x86_64-efi"
     efi_src.mkdir(parents=True, exist_ok=True)
     for item in (constants.GRUB_LIB_DIR / "x86_64-efi").iterdir():

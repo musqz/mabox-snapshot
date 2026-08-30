@@ -1,4 +1,5 @@
 import hashlib
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -17,6 +18,38 @@ def test_write_mkinitcpio_conf_contains_miso_hooks(tmp_path):
     assert "miso" in text
     assert "HOOKS=(" in text
     assert "MODULES=(loop dm-snapshot)" in text
+
+
+def test_build_mtools_mmd_command_prefixes_each_dir_with_the_image_root():
+    cmd = isobuild.build_mtools_mmd_command(Path("/work/efi.img"), ["efi", "efi/boot"])
+    assert cmd == ["mmd", "-i", "/work/efi.img", "::efi", "::efi/boot"]
+
+
+def test_build_mtools_mcopy_command_targets_an_image_internal_path():
+    cmd = isobuild.build_mtools_mcopy_command(
+        Path("/work/efi.img"), Path("/work/bootx64.efi"), "efi/boot/bootx64.efi"
+    )
+    assert cmd == ["mcopy", "-i", "/work/efi.img", "/work/bootx64.efi", "::efi/boot/bootx64.efi"]
+
+
+def test_build_fat_image_fills_the_image_with_mtools_not_a_loop_mount(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        isobuild.subprocess,
+        "run",
+        lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0),
+    )
+
+    src = tmp_path / "bootx64.efi"
+    src.write_bytes(b"efi")
+    isobuild._build_fat_image(tmp_path / "efi.img", src, "efi/boot/bootx64.efi", 4 * 1024 * 1024)
+
+    programs = [c[0] for c in calls]
+    assert programs == ["mkfs.fat", "mmd", "mcopy"]
+    assert "mount" not in programs and "umount" not in programs
+    assert (tmp_path / "efi.img").stat().st_size == 4 * 1024 * 1024
+    assert [c for c in calls if c[0] == "mmd"][0][-2:] == ["::efi", "::efi/boot"]
+    assert [c for c in calls if c[0] == "mcopy"][0][-1] == "::efi/boot/bootx64.efi"
 
 
 def test_build_bios_boot_command():

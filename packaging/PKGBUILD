@@ -17,6 +17,7 @@ depends=(
     'nbd'
     'curl'
     'dosfstools'
+    'mtools'
     'rsync'
     'openssl'
 )

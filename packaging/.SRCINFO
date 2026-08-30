@@ -19,6 +19,7 @@ pkgbase = mabox-snapshot
 	depends = nbd
 	depends = curl
 	depends = dosfstools
+	depends = mtools
 	depends = rsync
 	depends = openssl
 	optdepends = calamares: install-from-live-ISO support
