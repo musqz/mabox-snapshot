@@ -8,6 +8,15 @@
   garbled screen on the normal entry (older Intel/NVIDIA laptops, some
   hybrid-graphics setups) -- the same fallback every mainstream distro ISO
   ships. Purely additive: `set default=0` still selects the normal boot.
+- `create` no longer fails at the EFI-boot step with `mount: ... failed to
+  set up loop device for .../efi.img` (exit 32). The FAT `efi.img` was
+  populated by loop-mounting it, which needs root, the `loop` kernel
+  module loaded, and a free loop device -- none of which is guaranteed on
+  a host that was just updated to a new kernel and not yet rebooted, or
+  one whose loop devices are all in use. It is now filled with `mtools`
+  (`mmd` / `mcopy`), the same way archiso builds its `efiboot.img`, so no
+  loop mount is involved. Adds a runtime dependency on `mtools`; `doctor`
+  checks for it.
 
 ## 0.2.9
 

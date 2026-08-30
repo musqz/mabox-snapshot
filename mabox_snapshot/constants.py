@@ -110,7 +110,7 @@ DEMO_UID = 1000
 DEMO_GID = 1000
 DEMO_BASELINE_GROUPS = ["wheel", "audio", "video", "storage", "optical", "network"]
 
-REQUIRED_TOOLS = ["mksquashfs", "xorriso", "grub-mkimage", "mkinitcpio", "mkfs.fat", "rsync", "openssl"]
+REQUIRED_TOOLS = ["mksquashfs", "xorriso", "grub-mkimage", "mkinitcpio", "mkfs.fat", "mcopy", "rsync", "openssl"]
 # calamares is deliberately not here: it's checked separately (by its
 # settings.conf, see calamares.calamares_installed()) because `create` decides
 # live-only-vs-installable off that same signal, and `shutil.which` could
