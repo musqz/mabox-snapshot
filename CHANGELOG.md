@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.1
 
 - The live ISO's GRUB menu gains a **"memory test (memtest86+)"** entry
   when the build host has `memtest86+` installed. memtest is a standalone
