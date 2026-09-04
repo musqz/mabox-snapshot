@@ -47,8 +47,12 @@ def seed_etc_skel(overlay_dir: Path, skel_source: Path = constants.MABOX_SKEL_DI
     for whatever the rootfs layer's stock /etc/skel contains). The
     rootfs layer's own /etc/skel is never excluded (see constants.py's
     RESET_MODE_ONLY_EXCLUDES), so this only adds Mabox's own dotfiles on
-    top of it at unpack time -- unrelated skel content (.bashrc, etc.)
-    from the base system is untouched."""
+    top of it at unpack time -- anything the base system's /etc/skel has
+    that mabox-skel doesn't (e.g. locale-specific files) is untouched.
+    mabox-skel/skel/ does now ship its own .bashrc (see that file's own
+    header comment), so as of this copy .bashrc specifically comes from
+    Mabox, not the base system -- it wins on a name collision like every
+    other file this function seeds."""
     if not skel_source.exists():
         raise FileNotFoundError(
             f"vendored mabox-skel not found at {skel_source} -- is mabox-snapshot installed via its package?"
