@@ -1,6 +1,6 @@
 # Maintainer: musqz
 pkgname=mabox-snapshot
-pkgver=0.3.1
+pkgver=0.3.2
 pkgrel=1
 pkgdesc="Snapshot a running Mabox Linux system into a bootable live/install ISO"
 arch=('any')
@@ -32,7 +32,7 @@ makedepends=('python-build' 'python-installer' 'python-hatchling')
 checkdepends=('python-pytest')
 backup=('etc/mabox-snapshot/excludes.list')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('c1258d03586c3770e66e3c8f3eb652c53497b214fcb4f25122da49e51220bcc3')
+sha256sums=('PLACEHOLDER_UPDATE_AFTER_TAG_PUSH')
 
 build() {
     cd "$pkgname-$pkgver"
