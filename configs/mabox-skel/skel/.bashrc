@@ -172,9 +172,10 @@ SSH_TERMINAL_THEME="mellow-purple"
 su() {
 	(
 		INHIBIT_THEME_HIST=1 theme.sh "${ROOT_TERMINAL_THEME}"
-		trap 'theme.sh "$(theme.sh -l|tail -n1)"' INT
+		restored=0
+		trap 'theme.sh "$(theme.sh -l|tail -n1)"; restored=1' INT
 		env su "$@"
-		theme.sh "$(theme.sh -l|tail -n1)"
+		[ "$restored" = 0 ] && theme.sh "$(theme.sh -l|tail -n1)"
 	)
 }
 
@@ -191,19 +192,22 @@ sudo() {
 				sleep .2s
 				ps -p "$pid" > /dev/null && INHIBIT_THEME_HIST=1 theme.sh "${ROOT_TERMINAL_THEME}"
 		) &
+		disown
 
-		trap 'theme.sh "$(theme.sh -l|tail -n1)"' INT
+		restored=0
+		trap 'theme.sh "$(theme.sh -l|tail -n1)"; restored=1' INT
 		env sudo "$@"
-		theme.sh "$(theme.sh -l|tail -n1)"
+		[ "$restored" = 0 ] && theme.sh "$(theme.sh -l|tail -n1)"
 	)
 }
 
 ssh() {
 	(
 		INHIBIT_THEME_HIST=1 theme.sh "${SSH_TERMINAL_THEME}"
-		trap 'theme.sh "$(theme.sh -l|tail -n1)"' INT
+		restored=0
+		trap 'theme.sh "$(theme.sh -l|tail -n1)"; restored=1' INT
 		env ssh "$@"
-		theme.sh "$(theme.sh -l|tail -n1)"
+		[ "$restored" = 0 ] && theme.sh "$(theme.sh -l|tail -n1)"
 	)
 }
 
