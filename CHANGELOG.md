@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.2
+
+- Fixed a real pcmanfm crash on navigating into `/usr/share/backgrounds`:
+  vendored mabox-skel shipped an invalid `ViewMode=thumbnails` (plural) for
+  that folder's per-directory libfm setting, unlike the correct singular
+  value already used for `~/wallpapers`. Corrected to `ViewMode=thumbnail`.
+- mabox-skel now ships a default `.bashrc`. It never had one before, so
+  reset mode's `demo` account (and any account seeded from `etc/skel` on a
+  fresh preserving-mode build) got no shell aliases at all -- not even
+  bash's own stock defaults, let alone Mabox's own (`theme.sh` integration,
+  `mabox-todo.sh`'s `t` alias, etc.). The new file also fixes a
+  double-`theme.sh`-restore bug in the `su`/`sudo`/`ssh` wrapper functions
+  on Ctrl-C, and disowns a background watcher job in `sudo()` that could
+  otherwise outlive its subshell.
+
 ## 0.3.1
 
 - The live ISO's GRUB menu gains a **"memory test (memtest86+)"** entry
