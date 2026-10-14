@@ -36,21 +36,34 @@ def _dir_size(path: Path) -> int:
     return sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
 
 
+# Holders of many unrelated apps' data: tracked per child so the change prompt
+# can't offer to exclude all of ~/.config (desktop session configs) at once.
+_CONTAINER_DIRS = {".config", ".local", ".local/share", ".local/state"}
+
+
+def _scan(root: Path, rel: Path) -> list[HistoryEntry]:
+    entries = []
+    for child in sorted((root / rel).iterdir()):
+        child_rel = rel / child.name
+        if child.is_dir():
+            if str(child_rel) in _CONTAINER_DIRS:
+                entries.extend(_scan(root, child_rel))
+            else:
+                entries.append(HistoryEntry(name=str(child_rel), type="dir", size_bytes=_dir_size(child)))
+        elif child.is_file():
+            entries.append(HistoryEntry(name=str(child_rel), type="file", size_bytes=child.stat().st_size))
+    return entries
+
+
 def scan_home_entries(home: Path) -> list[HistoryEntry]:
-    """Top-level children of home only -- not a recursive listing. Directories
-    get the recursive total of file sizes beneath them; files get their own
-    size. Runs the same way regardless of mode: this tracks the live
-    filesystem's home-dir growth, independent of what a given ISO contains."""
+    """Top-level children of home, except that .config, .local/share and
+    .local/state are listed per child. Directories get the recursive total of
+    file sizes beneath them; files get their own size. Runs the same way
+    regardless of mode: this tracks the live filesystem's home-dir growth,
+    independent of what a given ISO contains."""
     if not home.exists():
         raise FileNotFoundError(f"home directory {home} does not exist")
-
-    entries = []
-    for child in sorted(home.iterdir()):
-        if child.is_dir():
-            entries.append(HistoryEntry(name=child.name, type="dir", size_bytes=_dir_size(child)))
-        elif child.is_file():
-            entries.append(HistoryEntry(name=child.name, type="file", size_bytes=child.stat().st_size))
-    return entries
+    return _scan(home, Path())
 
 
 def _toml_escape(value: str) -> str:
