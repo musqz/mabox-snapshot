@@ -241,3 +241,16 @@ def test_latest_n_zero_or_negative_returns_empty(tmp_path):
     history_dir = tmp_path / "history"
     assert history.latest(0, history_dir) == []
     assert history.latest(-1, history_dir) == []
+
+
+def test_scan_home_entries_expands_config_and_local_containers(tmp_path):
+    home = tmp_path / "home"
+    (home / ".config" / "noctalia").mkdir(parents=True)
+    (home / ".config" / "noctalia" / "a").write_bytes(b"x" * 5)
+    (home / ".local" / "share" / "app").mkdir(parents=True)
+    (home / ".local" / "share" / "app" / "b").write_bytes(b"x" * 7)
+    (home / ".local" / "bin").mkdir()
+
+    names = {e.name: e.size_bytes for e in history.scan_home_entries(home)}
+
+    assert names == {".config/noctalia": 5, ".local/share/app": 7, ".local/bin": 0}
