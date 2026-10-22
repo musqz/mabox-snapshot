@@ -49,9 +49,9 @@ def _self_exclude_patterns(*dirs: Path) -> list[str]:
     and output_dir are often the same directory."""
     rendered = []
     for d in dirs:
-        pattern = f"{d.relative_to('/')}/*"
-        if pattern not in rendered:
-            rendered.append(pattern)
+        for pattern in excludes.dir_exclude_patterns(str(d.relative_to("/"))):
+            if pattern not in rendered:
+                rendered.append(pattern)
     return rendered
 
 

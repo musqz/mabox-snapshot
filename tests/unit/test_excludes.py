@@ -356,7 +356,7 @@ def test_resolve_folder_excludes_relative_path(tmp_path):
 
     result = excludes.resolve_folder_excludes(("Download", "Videos"), home=home)
     expected_rel = str((home / "Downloads").relative_to("/"))
-    assert result == [f"{expected_rel}/*"]
+    assert result == [f"{expected_rel}/*", f"{expected_rel}/.*"]
 
 
 def test_detect_swap_paths_skips_uuid_entries(tmp_path):
@@ -385,7 +385,7 @@ def test_detect_foreign_mount_excludes_skips_root_and_allowed(tmp_path):
         root=root, allowed=(root / "boot",), mounts=mounts
     )
 
-    assert result == ["mount/data_opslag/*"]
+    assert result == ["mount/data_opslag/*", "mount/data_opslag/.*"]
 
 
 def test_detect_foreign_mount_excludes_allows_mounts_nested_under_allowed_root(tmp_path):
@@ -416,7 +416,7 @@ def test_detect_foreign_mount_excludes_unescapes_spaces(tmp_path):
 
     result = excludes.detect_foreign_mount_excludes(root=root, allowed=(), mounts=mounts)
 
-    assert result == ["run/media/My Passport/*"]
+    assert result == ["run/media/My Passport/*", "run/media/My Passport/.*"]
 
 
 def test_detect_foreign_mount_excludes_unescapes_tab_and_backslash(tmp_path):
@@ -427,7 +427,7 @@ def test_detect_foreign_mount_excludes_unescapes_tab_and_backslash(tmp_path):
 
     result = excludes.detect_foreign_mount_excludes(root=root, allowed=(), mounts=mounts)
 
-    assert result == ["weird\t\\\\name/*"]
+    assert result == ["weird\t\\\\name/*", "weird\t\\\\name/.*"]
 
 
 def test_detect_foreign_mount_excludes_skips_embedded_newline(tmp_path):
@@ -455,7 +455,7 @@ def test_detect_foreign_mount_excludes_escapes_glob_metacharacters(tmp_path):
 
     result = excludes.detect_foreign_mount_excludes(root=root, allowed=(), mounts=mounts)
 
-    assert result == ["run/media/Backup \\[2024\\]/*"]
+    assert result == ["run/media/Backup \\[2024\\]/*", "run/media/Backup \\[2024\\]/.*"]
 
 
 def test_detect_foreign_mount_excludes_allows_same_device_subvolume(tmp_path, monkeypatch):
@@ -490,7 +490,7 @@ def test_detect_foreign_mount_excludes_excludes_different_device_mount(tmp_path,
 
     result = excludes.detect_foreign_mount_excludes(root=root, allowed=(), mounts=mounts)
 
-    assert result == ["mount/data/*"]
+    assert result == ["mount/data/*", "mount/data/.*"]
 
 
 def test_detect_foreign_mount_excludes_missing_mounts_file(tmp_path):
@@ -511,7 +511,7 @@ def test_detect_foreign_mount_excludes_excludes_pseudo_fs_nested_under_allowed_p
 
     result = excludes.detect_foreign_mount_excludes(root=root, allowed=(root / "opt",), mounts=mounts)
 
-    assert result == ["opt/piavpn/etc/cgroup/net_cls/*"]
+    assert result == ["opt/piavpn/etc/cgroup/net_cls/*", "opt/piavpn/etc/cgroup/net_cls/.*"]
 
 
 def test_detect_foreign_mount_excludes_pseudo_fs_skips_device_check(tmp_path, monkeypatch):
@@ -530,7 +530,7 @@ def test_detect_foreign_mount_excludes_pseudo_fs_skips_device_check(tmp_path, mo
 
     result = excludes.detect_foreign_mount_excludes(root=root, allowed=(root / "opt",), mounts=mounts)
 
-    assert result == ["opt/proc/*"]
+    assert result == ["opt/proc/*", "opt/proc/.*"]
 
 
 def test_resolve_excludes_adds_reset_mode_only_patterns(tmp_path):
@@ -608,3 +608,17 @@ def test_exclude_unselected_kernel_modules_skips_kernel_missing_from_versions():
     result = excludes.exclude_unselected_kernel_modules([old, new], [new], versions)
 
     assert result == []
+
+
+def test_detect_swap_paths_escapes_glob_characters(tmp_path):
+    fstab = tmp_path / "fstab"
+    fstab.write_text("/swap[1] none swap sw 0 0\n")
+
+    assert excludes.detect_swap_paths(fstab) == ["swap\\[1\\]"]
+
+
+def test_resolve_folder_excludes_skips_folder_that_is_home(tmp_path):
+    (tmp_path / ".config").mkdir()
+    (tmp_path / ".config" / "user-dirs.dirs").write_text('XDG_TEMPLATES_DIR="$HOME"\n')
+
+    assert excludes.resolve_folder_excludes(("Templates",), tmp_path) == []

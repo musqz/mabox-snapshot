@@ -228,3 +228,10 @@ def test_build_overlay_reset_mode_skips_calamares_when_not_installed(tmp_path, m
     overlay.build_overlay(plan, include_calamares=False)
 
     assert called == ["seed", "etc_skel", "normalize", "sanitize"]
+
+
+def test_self_exclude_patterns_escape_glob_characters():
+    assert overlay._self_exclude_patterns(Path("/mnt/backup [2024]/work")) == [
+        "mnt/backup \\[2024\\]/work/*",
+        "mnt/backup \\[2024\\]/work/.*",
+    ]

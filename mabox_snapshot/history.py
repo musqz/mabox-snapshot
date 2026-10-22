@@ -66,8 +66,21 @@ def scan_home_entries(home: Path) -> list[HistoryEntry]:
     return _scan(home, Path())
 
 
+_TOML_CONTROL_ESCAPES = {"\n": "\\n", "\t": "\\t", "\r": "\\r"}
+
+
 def _toml_escape(value: str) -> str:
-    return value.replace("\\", "\\\\").replace('"', '\\"')
+    out = []
+    for c in value:
+        if c == "\\" or c == '"':
+            out.append("\\" + c)
+        elif c in _TOML_CONTROL_ESCAPES:
+            out.append(_TOML_CONTROL_ESCAPES[c])
+        elif ord(c) < 0x20 or ord(c) == 0x7F:
+            out.append(f"\\u{ord(c):04x}")
+        else:
+            out.append(c)
+    return "".join(out)
 
 
 def render_manifest(record: HistoryRecord) -> str:

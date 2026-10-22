@@ -10,6 +10,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from .excludes import dir_exclude_patterns, exclude_pattern
 from .history import HistoryEntry
 
 
@@ -42,9 +43,12 @@ def diff_entries(
     return changed
 
 
-def _exclude_pattern(home: Path, entry: ChangedEntry) -> str:
-    rel = (home / entry.name).relative_to("/")
-    return f"{rel}/*" if entry.type == "dir" else str(rel)
+def _exclude_patterns(home: Path, entry: ChangedEntry) -> list[str]:
+    rel = str((home / entry.name).relative_to("/"))
+    if entry.type == "dir":
+        return dir_exclude_patterns(rel)
+    pattern = exclude_pattern(rel)
+    return [pattern] if pattern else []
 
 
 def prompt_for_exclusions(changed: list[ChangedEntry], home: Path) -> list[str]:
@@ -70,7 +74,14 @@ def prompt_for_exclusions(changed: list[ChangedEntry], home: Path) -> list[str]:
         mb = c.delta_bytes / (1024**2)
         total_mb = c.size_bytes / (1024**2)
         print(f"{c.name} is {verb}: +{mb:.0f} MiB (now {total_mb:.0f} MiB)")
-        answer = input("  keep in this snapshot? [K/e] ").strip().lower()
+        try:
+            answer = input("  keep in this snapshot? [K/e] ").strip().lower()
+        except EOFError:
+            print("  input closed -- keeping the rest")
+            break
         if answer == "e":
-            excluded.append(_exclude_pattern(home, c))
+            patterns = _exclude_patterns(home, c)
+            if not patterns:
+                print("  name contains a newline -- kept")
+            excluded.extend(patterns)
     return excluded
