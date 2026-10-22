@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.3
+
+- List `.config` and `.local` children separately in the change prompt. The first create after upgrading may report them as new.
+- Move the project, README and package source URLs to Codeberg.
+
 ## 0.3.2
 
 - Fixed a real pcmanfm crash on navigating into `/usr/share/backgrounds`:

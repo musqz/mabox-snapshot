@@ -1,6 +1,6 @@
 # mabox-snapshot
 
-![Release](https://img.shields.io/github/v/release/musqz/mabox-snapshot.svg)
+![Release](https://img.shields.io/gitea/v/release/linux-bird/mabox-snapshot?gitea_url=https://codeberg.org)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Mabox%20Linux-2f4f4f.svg)
@@ -29,7 +29,7 @@ pacman -S mabox-snapshot
 
 Or manual with makepkg
 ```sh
-git clone https://github.com/musqz/mabox-snapshot.git
+git clone https://codeberg.org/linux-bird/mabox-snapshot.git
 cd mabox-snapshot/packaging
 makepkg -si
 ```
