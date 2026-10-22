@@ -1,10 +1,10 @@
 # Maintainer: musqz
 pkgname=mabox-snapshot
-pkgver=0.3.2
+pkgver=0.3.3
 pkgrel=1
 pkgdesc="Snapshot a running Mabox Linux system into a bootable live/install ISO"
 arch=('any')
-url="https://github.com/musqz/mabox-snapshot"
+url="https://codeberg.org/linux-bird/mabox-snapshot"
 license=('MIT')
 depends=(
     'python'
@@ -31,21 +31,21 @@ optdepends=(
 makedepends=('python-build' 'python-installer' 'python-hatchling')
 checkdepends=('python-pytest')
 backup=('etc/mabox-snapshot/excludes.list')
-source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('7d62207fe02990fdf925473a1952e8dc2c5ed3f06459c87d464ef0bbbcc62d36')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
+sha256sums=('PLACEHOLDER_UPDATE_AFTER_TAG_PUSH')
 
 build() {
-    cd "$pkgname-$pkgver"
+    cd "$pkgname"
     python -m build --wheel --no-isolation
 }
 
 check() {
-    cd "$pkgname-$pkgver"
+    cd "$pkgname"
     python -m pytest tests/unit/ -q
 }
 
 package() {
-    cd "$pkgname-$pkgver"
+    cd "$pkgname"
     python -m installer --destdir="$pkgdir" dist/*.whl
 
     install -Dm644 configs/excludes.list.default \

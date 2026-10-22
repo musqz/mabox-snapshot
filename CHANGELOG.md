@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.3
+
+- List `.config` and `.local` children separately in the change prompt. The first create after upgrading may report them as new.
+- Escape glob characters and match hidden files in the change prompt's exclusions, `--exclude-folder` and other generated exclude patterns.
+- Escape control characters in history manifests; keep earlier answers when the change prompt gets EOF.
+- Move the project, README and package source URLs to Codeberg.
+
 ## 0.3.2
 
 - Fixed a real pcmanfm crash on navigating into `/usr/share/backgrounds`:
