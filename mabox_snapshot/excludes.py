@@ -227,11 +227,13 @@ def resolve_folder_excludes(names: tuple[str, ...], home: Path | None = None) ->
         path = user_dirs.get(name)
         if path is None:
             continue  # not defined for this user -- nothing to exclude
+        if path == home:
+            continue  # "XDG_x_DIR=$HOME/" disables a folder; don't exclude all of home
         try:
             rel = path.relative_to("/")
         except ValueError:
             continue
-        excludes.append(f"{rel}/*")
+        excludes += dir_exclude_patterns(str(rel))
     return excludes
 
 
@@ -252,7 +254,9 @@ def detect_swap_paths(fstab: Path = constants.FSTAB_FILE) -> list[str]:
             continue
         device, _mountpoint, fstype = fields[0], fields[1], fields[2]
         if fstype == "swap" and device.startswith("/"):
-            excludes.append(device.lstrip("/"))
+            pattern = exclude_pattern(_unescape_mounts_field(device).lstrip("/"))
+            if pattern:
+                excludes.append(pattern)
     return excludes
 
 
@@ -275,8 +279,28 @@ def _unescape_mounts_field(raw: str) -> str:
 _GLOB_METACHARS = frozenset("\\[]*?")
 
 
-def _escape_glob(text: str) -> str:
-    return "".join(f"\\{c}" if c in _GLOB_METACHARS else c for c in text)
+# mksquashfs -wildcards also does extglob matching, so "(", ")", "+", "@" and
+# "!" need escaping on top of the set above.
+_GLOB_ESCAPE = _GLOB_METACHARS | frozenset("()+@!")
+
+
+def escape_glob(text: str) -> str:
+    return "".join(f"\\{c}" if c in _GLOB_ESCAPE else c for c in text)
+
+
+def exclude_pattern(rel: str) -> str | None:
+    """Escaped -ef line for a path relative to '/'. None for a name with a
+    newline: it can't be one line in the newline-delimited -ef file."""
+    if "\n" in rel:
+        return None
+    return escape_glob(rel)
+
+
+def dir_exclude_patterns(rel: str) -> list[str]:
+    """Exclude lines for a directory's contents. "/*" alone skips dotfiles
+    (FNM_PERIOD), so hidden children need "/.*"."""
+    text = exclude_pattern(rel)
+    return [] if text is None else [f"{text}/*", f"{text}/.*"]
 
 
 def detect_foreign_mount_excludes(
@@ -342,13 +366,10 @@ def detect_foreign_mount_excludes(
                     continue  # same filesystem (e.g. a Btrfs subvolume), not foreign storage
             except OSError:
                 pass  # can't verify -- fall through and exclude it to be safe
-        rel_text = _escape_glob(str(rel))
-        if "\n" in rel_text:
-            continue  # can't be represented as one line in a newline-delimited -ef file
-        pattern = f"{rel_text}/*"
-        if pattern not in seen:
-            seen.add(pattern)
-            excludes.append(pattern)
+        for pattern in dir_exclude_patterns(str(rel)):
+            if pattern not in seen:
+                seen.add(pattern)
+                excludes.append(pattern)
     return excludes
 
 
@@ -434,10 +455,9 @@ def exclude_unselected_kernel_modules(
 
 _RULE_ACTIONS = ("exclude", "include")
 
-# Characters mksquashfs's -wildcards mode treats as glob metacharacters --
-# same set _escape_glob() above already guards against for foreign-mount
-# labels; reused here since compile_override_rules() also turns real,
-# walked directory-entry names into concrete exclude patterns.
+# fnmatch-style glob characters rejected in an include rule's literal suffix.
+# escape_glob() escapes a wider (extglob) set, so rule suffixes are checked
+# against the narrower one only.
 _RULE_GLOB_METACHARS = _GLOB_METACHARS
 
 
@@ -537,10 +557,9 @@ def _walk_and_protect(base: Path, keep_tree: dict, root: Path) -> list[str]:
             rel = entry.relative_to(root)
         except ValueError:
             continue
-        rel_text = _escape_glob(str(rel))
-        if "\n" in rel_text:
-            continue  # can't be represented as one line in a newline-delimited -ef file
-        result.append(rel_text)
+        pattern = exclude_pattern(str(rel))
+        if pattern:
+            result.append(pattern)
     return result
 
 

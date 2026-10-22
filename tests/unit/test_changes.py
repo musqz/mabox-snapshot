@@ -1,4 +1,8 @@
+import shutil
+import subprocess
 from pathlib import Path
+
+import pytest
 
 from mabox_snapshot import changes
 from mabox_snapshot.history import HistoryEntry
@@ -49,14 +53,59 @@ def test_diff_entries_boundary_growth_is_flagged():
     assert len(changed) == 1
 
 
-def test_exclude_pattern_dir_gets_trailing_glob():
-    entry = changes.ChangedEntry(name="Videos", type="dir", size_bytes=1, delta_bytes=1, is_new=True)
-    assert changes._exclude_pattern(Path("/home/alice"), entry) == "home/alice/Videos/*"
+def _entry(name, type="dir"):
+    return changes.ChangedEntry(name=name, type=type, size_bytes=1, delta_bytes=1, is_new=True)
+
+
+def test_exclude_patterns_dir_covers_visible_and_hidden_children():
+    assert changes._exclude_patterns(Path("/home/alice"), _entry("Videos")) == [
+        "home/alice/Videos/*",
+        "home/alice/Videos/.*",
+    ]
+
+
+@pytest.mark.parametrize("name,escaped", [
+    (".config/Foo [beta]", ".config/Foo \\[beta\\]"),
+    ("a+(b)", "a\\+\\(b\\)"),
+    ("x!(y)", "x\\!\\(y\\)"),
+    ("star*?", "star\\*\\?"),
+])
+def test_exclude_patterns_escape_glob_characters(name, escaped):
+    assert changes._exclude_patterns(Path("/home/alice"), _entry(name))[0] == f"home/alice/{escaped}/*"
+
+
+def test_exclude_patterns_skip_newline_names():
+    assert changes._exclude_patterns(Path("/home/alice"), _entry("a\nusr")) == []
+
+
+@pytest.mark.skipif(not (shutil.which("mksquashfs") and shutil.which("unsquashfs")), reason="squashfs-tools not installed")
+def test_exclude_patterns_match_in_mksquashfs(tmp_path):
+    src = tmp_path / "src"
+    home = src / "home"
+    for d in ("a+(b)", "ab", ".config/Foo [beta]"):
+        (home / d).mkdir(parents=True)
+    (home / "a+(b)" / "f").write_text("x")
+    (home / "a+(b)" / ".hidden").write_text("x")
+    (home / "ab" / "f").write_text("x")
+    (home / ".config/Foo [beta]" / "f").write_text("x")
+    patterns = []
+    for name in ("a+(b)", ".config/Foo [beta]"):
+        patterns += changes._exclude_patterns(Path("/home"), _entry(name))
+    ef = tmp_path / "ef"
+    ef.write_text("\n".join(patterns) + "\n")
+    img = tmp_path / "out.sqsh"
+    subprocess.run(["mksquashfs", str(src), str(img), "-quiet", "-no-progress",
+                    "-wildcards", "-ef", str(ef)], check=True, capture_output=True)
+    listing = subprocess.run(["unsquashfs", "-l", str(img)], check=True,
+                             capture_output=True, text=True).stdout
+    assert "ab/f" in listing
+    assert "a+(b)/f" not in listing and "a+(b)/.hidden" not in listing
+    assert "Foo [beta]/f" not in listing
 
 
 def test_exclude_pattern_file_has_no_trailing_glob():
     entry = changes.ChangedEntry(name="big.iso", type="file", size_bytes=1, delta_bytes=1, is_new=True)
-    assert changes._exclude_pattern(Path("/home/alice"), entry) == "home/alice/big.iso"
+    assert changes._exclude_patterns(Path("/home/alice"), entry) == ["home/alice/big.iso"]
 
 
 def test_prompt_for_exclusions_no_changes_returns_empty():
@@ -86,7 +135,7 @@ def test_prompt_for_exclusions_e_excludes(monkeypatch):
     monkeypatch.setattr("builtins.input", lambda _: "e")
     changed = [changes.ChangedEntry(name="Videos", type="dir", size_bytes=1, delta_bytes=1, is_new=True)]
 
-    assert changes.prompt_for_exclusions(changed, Path("/home/alice")) == ["home/alice/Videos/*"]
+    assert changes.prompt_for_exclusions(changed, Path("/home/alice")) == ["home/alice/Videos/*", "home/alice/Videos/.*"]
 
 
 def test_prompt_for_exclusions_mixed_answers(monkeypatch):
@@ -98,4 +147,23 @@ def test_prompt_for_exclusions_mixed_answers(monkeypatch):
         changes.ChangedEntry(name="notes.txt", type="file", size_bytes=1, delta_bytes=1, is_new=True),
     ]
 
-    assert changes.prompt_for_exclusions(changed, Path("/home/alice")) == ["home/alice/Videos/*"]
+    assert changes.prompt_for_exclusions(changed, Path("/home/alice")) == ["home/alice/Videos/*", "home/alice/Videos/.*"]
+
+
+def test_prompt_for_exclusions_eof_keeps_earlier_answers(monkeypatch):
+    monkeypatch.setattr(changes.sys.stdin, "isatty", lambda: True)
+    answers = iter(["e"])
+
+    def fake_input(_):
+        try:
+            return next(answers)
+        except StopIteration:
+            raise EOFError
+
+    monkeypatch.setattr("builtins.input", fake_input)
+    changed = [_entry("Videos"), _entry("Music")]
+
+    assert changes.prompt_for_exclusions(changed, Path("/home/alice")) == [
+        "home/alice/Videos/*",
+        "home/alice/Videos/.*",
+    ]

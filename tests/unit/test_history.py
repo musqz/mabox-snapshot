@@ -254,3 +254,12 @@ def test_scan_home_entries_expands_config_and_local_containers(tmp_path):
     names = {e.name: e.size_bytes for e in history.scan_home_entries(home)}
 
     assert names == {".config/noctalia": 5, ".local/share/app": 7, ".local/bin": 0}
+
+
+def test_render_manifest_escapes_control_characters():
+    entry = history.HistoryEntry(name="a\nb\tc\x01", type="file", size_bytes=1)
+    record = history.HistoryRecord(timestamp="t", mode="reset", iso="x.iso", entries=[entry])
+
+    parsed = tomllib.loads(history.render_manifest(record))
+
+    assert parsed["entries"][0]["name"] == "a\nb\tc\x01"
