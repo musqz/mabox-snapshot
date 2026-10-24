@@ -12,7 +12,7 @@ requires-python = ">=3.11"
 authors = [{ name = "musqz" }]
 
 [project.urls]
-Homepage = "https://codeberg.org/linux-bird/mabox-snapshot"
+Homepage = "https://github.com/musqz/mabox-snapshot"
 
 [project.scripts]
 mabox-snapshot = "mabox_snapshot.cli:main"
