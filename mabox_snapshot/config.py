@@ -37,6 +37,16 @@ def _load_toml(path: Path) -> dict:
 def _coerce(raw: dict) -> dict:
     """Convert TOML-friendly string/list values into the dataclass's field types."""
     out = dict(raw)
+    for f in fields(SnapshotConfig):
+        v = out.get(f.name)
+        if not isinstance(v, str):
+            continue
+        if f.type == "bool":
+            if v.strip().lower() not in ("true", "false"):
+                raise ValueError(f"{f.name}: expected true or false, got {v!r}")
+            out[f.name] = v.strip().lower() == "true"
+        elif f.type == "int" or f.type == "int | None":
+            out[f.name] = int(v)
     if "workdir" in out:
         out["workdir"] = Path(out["workdir"])
     if "output_dir" in out and out["output_dir"] is not None:
