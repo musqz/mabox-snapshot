@@ -73,3 +73,14 @@ def test_set_value_rejects_unknown_key(tmp_path):
     except ValueError:
         pass
     assert not user.exists()
+
+
+def test_load_coerces_quoted_bool_and_int_values(tmp_path):
+    user = tmp_path / "user.conf"
+    user.write_text('encrypt = "false"\nall_kernels = "true"\ncompression_level = "15"\nchange_threshold_mb = "500"\n')
+
+    cfg = config.load(system_path=tmp_path / "system.conf", user_path=user)
+    assert cfg.encrypt is False
+    assert cfg.all_kernels is True
+    assert cfg.compression_level == 15
+    assert cfg.change_threshold_mb == 500
