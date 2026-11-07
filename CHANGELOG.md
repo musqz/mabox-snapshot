@@ -1,7 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.3.4
 
+- Fix `create reset` failing with the `--encrypt` error (also with `--explain` and `--dry-run`) when the user config holds `encrypt = "false"`: `config set` writes quoted strings, which were read as true. Quoted bools and ints in the config file are now converted.
 - Move the project, README and package source URLs back to GitHub.
 
 ## 0.3.3
